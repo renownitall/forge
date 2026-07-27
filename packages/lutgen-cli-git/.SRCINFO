@@ -1,0 +1,26 @@
+pkgbase = lutgen-cli-git
+	pkgdesc = A blazingly fast interpolated LUT utility for arbitrary and popular color palettes (git)
+	pkgver = 1.1.1.r1.gd7780e8
+	pkgrel = 1
+	url = https://github.com/ozwaldorf/lutgen-rs
+	arch = x86_64
+	arch = i686
+	arch = aarch64
+	arch = armv7h
+	license = MIT
+	makedepends = cargo
+	makedepends = git
+	depends = gcc-libs
+	depends = glibc
+	provides = lutgen=1.1.1
+	provides = lutgen-cli=1.1.1
+	conflicts = lutgen
+	conflicts = lutgen-cli
+	conflicts = lutgen-bin
+	conflicts = lutgen-git
+	options = !lto
+	source = lutgen-cli-git::git+https://github.com/ozwaldorf/lutgen-rs.git
+	sha256sums = SKIP
+
+pkgname = lutgen-cli-git
+

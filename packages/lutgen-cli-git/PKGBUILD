@@ -1,0 +1,74 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+# Upstream: Ossian Mapes <self@ossian.dev>
+
+_pkgname=lutgen
+pkgname=lutgen-cli-git
+pkgver=1.1.1.r1.gd7780e8
+pkgrel=1
+pkgdesc='A blazingly fast interpolated LUT utility for arbitrary and popular color palettes (git)'
+arch=('x86_64' 'i686' 'aarch64' 'armv7h')
+url='https://github.com/ozwaldorf/lutgen-rs'
+license=('MIT')
+depends=('gcc-libs' 'glibc')
+makedepends=('cargo' 'git')
+provides=("lutgen=${pkgver%%.r*}" "lutgen-cli=${pkgver%%.r*}")
+conflicts=('lutgen' 'lutgen-cli' 'lutgen-bin' 'lutgen-git')
+options=('!lto')
+source=("$pkgname::git+https://github.com/ozwaldorf/lutgen-rs.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$pkgname"
+  # Tags are prefixed per-crate (e.g. lutgen-v1.1.1), only match the CLI ones
+  # so lutgen-studio-v* releases do not bump this package's version.
+  git describe --long --tags --abbrev=7 --match 'lutgen-v[0-9]*' 2>/dev/null |
+    sed 's/^lutgen-v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$srcdir/$pkgname"
+  # Build with the stable toolchain instead of the pinned nightly in
+  # rust-toolchain.toml (only needed for the wasm studio target).
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  # Only the CLI crate; lutgen-studio is a separate GUI package.
+  cargo build --frozen --release --package lutgen-cli --bin "$_pkgname"
+
+  # Shell completions are emitted by the built binary itself (bpaf).
+  local bin="target/release/$_pkgname"
+  install -d completions
+  "$bin" --bpaf-complete-style-bash >"completions/$_pkgname"
+  "$bin" --bpaf-complete-style-zsh >"completions/_$_pkgname"
+  "$bin" --bpaf-complete-style-fish >"completions/$_pkgname.fish"
+}
+
+check() {
+  cd "$srcdir/$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release --package lutgen-cli --package lutgen --package lutgen-palettes
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+
+  install -Dm755 "target/release/$_pkgname" -t "$pkgdir/usr/bin"
+
+  # Man page (pre-generated and kept in tree by the docs test)
+  install -Dm644 "docs/man/$_pkgname.1" -t "$pkgdir/usr/share/man/man1"
+
+  # Shell completions
+  install -Dm644 "completions/$_pkgname" -t "$pkgdir/usr/share/bash-completion/completions"
+  install -Dm644 "completions/_$_pkgname" -t "$pkgdir/usr/share/zsh/site-functions"
+  install -Dm644 "completions/$_pkgname.fish" -t "$pkgdir/usr/share/fish/vendor_completions.d"
+
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}

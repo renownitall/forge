@@ -1,0 +1,278 @@
+name: Build Arch Packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "37 4 * * *"
+
+env:
+  REPO_NAME: forge
+
+permissions: {}
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  changed-packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_packages: ${{ steps.set-matrix.outputs.has_packages }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed packages
+        id: set-matrix
+        run: |
+          ALL_PACKAGES=$(ls -d packages/*/PKGBUILD 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} || echo "")
+
+          if [ -z "$ALL_PACKAGES" ]; then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"package\":[]}" >> "$GITHUB_OUTPUT"
+            echo "No packages found in repository"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]]; then
+              PACKAGES="$ALL_PACKAGES"
+            else
+              CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} -- packages/ | cut -d/ -f2 | sort -u)
+              PACKAGES=""
+              for pkg in $CHANGED; do
+                if echo "$ALL_PACKAGES" | grep -qx "$pkg"; then
+                  PACKAGES="$PACKAGES $pkg"
+                fi
+              done
+            fi
+          else
+            PACKAGES="$ALL_PACKAGES"
+          fi
+
+          PACKAGES=$(echo "$PACKAGES" | xargs)
+
+          if [ -z "$PACKAGES" ]; then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"package\":[]}" >> "$GITHUB_OUTPUT"
+            echo "No packages to build"
+          else
+            JSON=$(echo "$PACKAGES" | tr ' ' '\n' | jq -R . | jq -sc '{package: .}')
+            echo "has_packages=true" >> "$GITHUB_OUTPUT"
+            echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+            echo "Building: $PACKAGES"
+          fi
+
+  build:
+    needs: changed-packages
+    if: needs.changed-packages.outputs.has_packages == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.changed-packages.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Cache pacman packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /var/cache/pacman/pkg
+          key: pacman-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/PKGBUILD', matrix.package)) }}
+          restore-keys: |
+            pacman-${{ matrix.package }}-
+            pacman-
+
+      - name: Cache Rust/Cargo artifacts
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            /home/builder/.cargo/registry
+            /home/builder/.cargo/git
+          key: cargo-${{ matrix.package }}-${{ hashFiles(format('packages/{0}/PKGBUILD', matrix.package)) }}
+          restore-keys: |
+            cargo-${{ matrix.package }}-
+            cargo-
+
+      - name: Setup build environment
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm --noprogressbar
+          pacman -S --noconfirm --needed --noprogressbar git
+
+          # x86-64-v3 with aggressive optimization
+          sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3/g' /etc/makepkg.conf
+
+          # Enable LTO
+          sed -i 's/!lto/lto/' /etc/makepkg.conf
+
+          # Parallel compilation
+          NPROC=$(nproc)
+          sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j${NPROC}\"/" /etc/makepkg.conf
+
+          # Rust flags
+          cat >> /etc/makepkg.conf <<'EOF'
+          RUSTFLAGS="-C target-cpu=x86-64-v3 -C opt-level=3 -C link-arg=-fuse-ld=mold"
+          EOF
+
+          # Faster zstd compression with threading
+          sed -i "s/COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q --threads=0 -19 -)/" /etc/makepkg.conf
+
+          # Create non-root builder
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          mkdir -p /home/builder/.cargo /home/builder/.gnupg
+          chown -R builder:builder /home/builder/.cargo /home/builder/.gnupg
+          chmod 700 /home/builder/.gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          KEY_FILE=$(mktemp)
+          PASS_FILE=$(mktemp)
+          echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
+          echo "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$KEY_FILE" "$PASS_FILE"
+          chown builder:builder "$KEY_FILE" "$PASS_FILE"
+
+          # 1. Configure agent BEFORE doing anything else
+          su builder -c "mkdir -p /home/builder/.gnupg && chmod 700 /home/builder/.gnupg"
+          su builder -c "echo 'allow-preset-passphrase' > /home/builder/.gnupg/gpg-agent.conf"
+
+          # 2. Import key (this auto-starts the agent reading the new config)
+          su builder -c "gpg --batch --import $KEY_FILE"
+          su builder -c "gpg-connect-agent reloadagent /bye"
+
+          # 3. Preset the passphrase
+          KEYGRIP=$(su builder -c "gpg --list-secret-keys --with-keygrip --with-colons" | awk -F: '/^grp/ {print $10; exit}')
+          su builder -c "cat $PASS_FILE | /usr/lib/gnupg/gpg-preset-passphrase --preset $KEYGRIP"
+
+          rm -f "$KEY_FILE" "$PASS_FILE"
+
+      - name: Build ${{ matrix.package }}
+        run: |
+          cd "$GITHUB_WORKSPACE/packages/${{ matrix.package }}"
+          su builder -c "makepkg -s --sign --noconfirm --noprogressbar --cleanbuild"
+
+      - name: Verify package was built
+        run: |
+          ls packages/${{ matrix.package }}/*.pkg.tar.zst
+          ls packages/${{ matrix.package }}/*.pkg.tar.zst.sig
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.package }}
+          path: |
+            packages/${{ matrix.package }}/*.pkg.tar.zst
+            packages/${{ matrix.package }}/*.pkg.tar.zst.sig
+          if-no-files-found: error
+          retention-days: 3
+
+  repo:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base
+    permissions:
+      contents: read
+    steps:
+      - name: Install repo tools
+        run: pacman -Syu --noconfirm --noprogressbar
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          KEY_FILE=$(mktemp)
+          PASS_FILE=$(mktemp)
+          echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
+          echo "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$KEY_FILE" "$PASS_FILE"
+
+          mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+          echo 'allow-preset-passphrase' > ~/.gnupg/gpg-agent.conf
+
+          gpg --batch --import "$KEY_FILE"
+          gpg-connect-agent reloadagent /bye
+
+          KEYGRIP=$(gpg --list-secret-keys --with-keygrip --with-colons | awk -F: '/^grp/ {print $10; exit}')
+          cat "$PASS_FILE" | /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
+
+          rm -f "$KEY_FILE" "$PASS_FILE"
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts/
+
+      - name: Build repository database
+        run: |
+          mkdir -p repo
+
+          find artifacts/ -name "*.pkg.tar.zst" -exec mv {} repo/ \;
+          find artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} repo/ \;
+
+          cd repo
+
+          pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
+          echo "Found ${pkg_count} package(s)"
+          if [ "$pkg_count" -eq 0 ]; then
+            echo "::error::No packages found to build repository"
+            exit 1
+          fi
+
+          repo-add --remove --sign "${REPO_NAME}.db.tar.gz" *.pkg.tar.zst
+
+          # Replace symlinks with copies for GitHub Pages
+          for link in "${REPO_NAME}.db" "${REPO_NAME}.db.sig" "${REPO_NAME}.files" "${REPO_NAME}.files.sig"; do
+            if [ -L "$link" ]; then
+              target=$(readlink "$link")
+              rm "$link"
+              cp "$target" "$link"
+            fi
+          done
+
+          echo "Repository contents:"
+          ls -lah
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: repo/
+
+  deploy:
+    needs: repo
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
