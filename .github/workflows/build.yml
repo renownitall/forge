@@ -198,6 +198,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
       - name: Install repo tools
         run: pacman -Syu --noconfirm --noprogressbar
 
@@ -231,6 +234,7 @@ jobs:
       - name: Build repository database
         run: |
           mkdir -p repo
+          cp signing_key.asc repo/
 
           find artifacts/ -name "*.pkg.tar.zst" -exec mv {} repo/ \;
           find artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} repo/ \;
