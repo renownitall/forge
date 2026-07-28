@@ -6,8 +6,12 @@ pkgdesc="Orchis GTK theme, built with square (0px) corners"
 arch=('any')
 url="https://github.com/vinceliuice/Orchis-theme"
 license=('GPL-3.0-or-later')
-depends=('gtk-engine-murrine' 'gnome-themes-extra')
-makedepends=('sassc' 'git')
+depends=('sassc')
+makedepends=('git')
+optdepends=(
+  'gtk-engine-murrine: GTK2 theme support'
+  'gnome-themes-extra: GTK2 theme support'
+)
 provides=('orchis-theme')
 conflicts=('orchis-theme' 'orchis-theme-git')
 source=("${pkgname}::git+https://github.com/vinceliuice/Orchis-theme.git")
