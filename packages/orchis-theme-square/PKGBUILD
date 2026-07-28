@@ -1,0 +1,30 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+pkgname=orchis-theme-square
+pkgver=2026.07.07
+pkgrel=1
+pkgdesc="Orchis GTK theme, built with square (0px) corners"
+arch=('any')
+url="https://github.com/vinceliuice/Orchis-theme"
+license=('GPL-3.0-or-later')
+depends=('gtk-engine-murrine' 'gnome-themes-extra')
+makedepends=('sassc' 'git')
+provides=('orchis-theme')
+conflicts=('orchis-theme' 'orchis-theme-git')
+source=("${pkgname}::git+https://github.com/vinceliuice/Orchis-theme.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${pkgname}"
+  git log -1 --format='%cd' --date=format:'%Y.%m.%d'
+}
+
+package() {
+  cd "${pkgname}"
+  ./install.sh \
+    --dest "${pkgdir}/usr/share/themes" \
+    --name Orchis \
+    --theme default \
+    --color dark \
+    --size standard \
+    --round 0
+}
