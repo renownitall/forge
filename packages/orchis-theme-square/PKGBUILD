@@ -6,8 +6,12 @@ pkgdesc="Orchis GTK theme, built with square (0px) corners"
 arch=('any')
 url="https://github.com/vinceliuice/Orchis-theme"
 license=('GPL-3.0-or-later')
-depends=('sassc')
-makedepends=('git')
+depends=()
+makedepends=('sassc' 'git')
+optdepends=(
+  'gtk-engine-murrine: GTK2 theme support'
+  'gnome-themes-extra: GTK2 theme support'
+)
 optdepends=(
   'gtk-engine-murrine: GTK2 theme support'
   'gnome-themes-extra: GTK2 theme support'
@@ -28,7 +32,7 @@ package() {
     --dest "${pkgdir}/usr/share/themes" \
     --name Orchis \
     --theme default \
-    --color dark \
-    --size standard \
+    --color light dark \
+    --size standard compact \
     --round 0
 }
