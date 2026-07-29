@@ -1,0 +1,19 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+pkgname=ttf-googlesans-code
+pkgver=7.001
+pkgrel=1
+pkgdesc="Official Google Sans Code monospace font family (variable TTF)"
+arch=('any')
+url="https://github.com/googlefonts/googlesans-code"
+license=('OFL-1.1')
+depends=('fontconfig')
+provides=('ttf-font' 'ttf-googlesans-code' 'ttf-google-sans-code' 'google-sans-code')
+conflicts=('ttf-google-sans-code' 'ttf-google-sans-code-vf' 'ttf-google-sans-code-git' 'ttf-googlesans-code-git')
+source=("GoogleSansCode-v${pkgver}.zip::https://github.com/googlefonts/googlesans-code/releases/download/v${pkgver}/GoogleSansCode-v${pkgver}.zip")
+sha256sums=('eebba2a438882396e8530cad6d6cb80182b0afb6e9e0ad07b7340359a53ba2e9')
+
+package() {
+  cd "$srcdir"
+  install -Dm644 *.ttf -t "$pkgdir/usr/share/fonts/TTF/"
+  install -Dm644 OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

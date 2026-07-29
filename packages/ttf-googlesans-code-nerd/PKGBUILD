@@ -1,0 +1,43 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+pkgname=ttf-googlesans-code-nerd
+_gscver=7.001
+_nfver=3.4.0
+pkgver=7.001
+pkgrel=1
+pkgdesc="Official Google Sans Code monospace font, patched with Nerd Fonts (variable TTF)"
+arch=('any')
+url="https://github.com/googlefonts/googlesans-code"
+license=('OFL-1.1' 'MIT')
+depends=('fontconfig')
+makedepends=('python-fontforge' 'python')
+provides=('ttf-font' 'nerd-fonts' 'ttf-googlesans-code-nerd' 'ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font')
+conflicts=('ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-git')
+source=(
+  "GoogleSansCode-v${_gscver}.zip::https://github.com/googlefonts/googlesans-code/releases/download/v${_gscver}/GoogleSansCode-v${_gscver}.zip"
+  "FontPatcher-${_nfver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${_nfver}/FontPatcher.zip"
+)
+sha256sums=('eebba2a438882396e8530cad6d6cb80182b0afb6e9e0ad07b7340359a53ba2e9'
+  'a8f11e511ed7c69e96680858c06b50a643ea7752e26d5cd13dd5e5cc53ab1760')
+
+build() {
+  cd "$srcdir"
+  mkdir -p build
+
+  # Patch all Google Sans Code variable TTF fonts
+  # Using --complete and --careful flags as recommended for standard Nerd Font releases
+  # --glyphdir points to src/glyphs/ as structured in the Nerd Fonts repository / FontPatcher release archive
+  for _font in GoogleSansCode*.ttf; do
+    python font-patcher "$_font" \
+      --complete \
+      --careful \
+      --quiet \
+      --glyphdir "src/glyphs/" \
+      --outputdir "build"
+  done
+}
+
+package() {
+  cd "$srcdir"
+  install -Dm644 build/*.ttf -t "$pkgdir/usr/share/fonts/TTF/"
+  install -Dm644 OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
