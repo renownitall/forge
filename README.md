@@ -30,12 +30,12 @@ sudo pacman -S <package-name>
 
 ## Available packages
 
-| Package             | Description (from `PKGBUILD`)                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `wayfreeze-git`     | `Tool to freeze the screen of a wayland compositor`                                       |
-| `lutgen-cli-git`    | `A blazingly fast interpolated lut utility for arbitrary and popular color palettes (git)` |
-| `wl-screenrec`      | `High performance hardware accelerated wlroots screen recorder`                            |
-| `xdg-terminal-exec` | `Proposed standard to launching desktop apps with Terminal=true`                           |
+| Package             | Description                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `wayfreeze-git`     | Pauses your screen in place so you can draw a selection and take a screenshot without anything moving under your cursor |
+| `lutgen-cli-git`    | Recolors images (like wallpapers) to match a color theme such as Catppuccin, Gruvbox, or Nord                           |
+| `wl-screenrec`      | Records your screen to a video file using your GPU, so recording doesn't slow down your other apps                      |
+| `xdg-terminal-exec` | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use                   |
 
 ## Adding a package
 
