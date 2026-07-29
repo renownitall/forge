@@ -12,6 +12,7 @@ on:
 
 env:
   REPO_NAME: forge
+  PAGES_URL: https://renownitall.github.io/forge
 
 permissions: {}
 
@@ -241,23 +242,64 @@ jobs:
         with:
           path: artifacts/
 
-      - name: Build repository database
+      - name: Fetch existing repository packages
         run: |
           mkdir -p repo
           cp signing_key.asc repo/
 
-          find artifacts/ -name "*.pkg.tar.zst" -exec mv {} repo/ \;
-          find artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} repo/ \;
+          # Pull the existing .files.tar.gz from the live Pages site so we can
+          # enumerate which packages are already published. Without this step,
+          # repo-add below would build a fresh DB containing only the artifacts
+          # from this run, wiping every other package from the published repo.
+          echo "Fetching existing repo file index from ${PAGES_URL}..."
+          if curl -fsSL --connect-timeout 15 --max-time 60 \
+               "${PAGES_URL}/${REPO_NAME}.files.tar.gz" -o /tmp/files.tar.gz; then
+            # Each desc entry has a %FILENAME% block; the line immediately
+            # after it is the actual .pkg.tar.zst filename.
+            EXISTING_PKGS=$(tar -xzOzf /tmp/files.tar.gz \
+              | awk '/^%FILENAME%$/{getline; print}' \
+              | sort -u)
+            echo "Discovered existing packages in live repo:"
+            echo "$EXISTING_PKGS" | sed 's/^/  /'
 
+            for pkg in $EXISTING_PKGS; do
+              [ -f "repo/$pkg" ] && continue
+              echo "  Fetching $pkg..."
+              curl -fsSL --connect-timeout 15 --max-time 120 \
+                "${PAGES_URL}/${pkg}"     -o "repo/$pkg"     \
+                || echo "    WARN: $pkg missing on Pages, will be dropped from DB"
+              curl -fsSL --connect-timeout 15 --max-time 30 \
+                "${PAGES_URL}/${pkg}.sig" -o "repo/$pkg.sig" \
+                || echo "    WARN: $pkg.sig missing on Pages"
+            done
+          else
+            echo "  No existing repo found at ${PAGES_URL} (first deploy?)."
+          fi
+
+      - name: Build repository database
+        run: |
           cd repo
 
+          # Move the freshly built artifacts into repo/ alongside the fetched ones.
+          # artifacts/ is created by actions/download-artifact in the previous step,
+          # relative to $GITHUB_WORKSPACE.
+          find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
+          find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
+
           pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
-          echo "Found ${pkg_count} package(s)"
+          echo "Found ${pkg_count} package(s) total (existing + new):"
+          ls -1 *.pkg.tar.zst | sed 's/^/  /'
           if [ "$pkg_count" -eq 0 ]; then
             echo "::error::No packages found to build repository"
             exit 1
           fi
 
+          # repo-add updates each matching entry in place when re-adding a
+          # package that already exists in the DB, so rebuilt packages get
+          # their metadata refreshed while all other entries are preserved.
+          # --remove only deletes DB entries whose .pkg.tar.zst file is
+          # missing from disk — since we fetched all existing files above,
+          # nothing legitimate will be removed.
           repo-add --remove --sign "${REPO_NAME}.db.tar.gz" *.pkg.tar.zst
 
           # Replace symlinks with copies for GitHub Pages
