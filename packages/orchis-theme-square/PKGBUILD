@@ -12,10 +12,6 @@ optdepends=(
   'gtk-engine-murrine: GTK2 theme support'
   'gnome-themes-extra: GTK2 theme support'
 )
-optdepends=(
-  'gtk-engine-murrine: GTK2 theme support'
-  'gnome-themes-extra: GTK2 theme support'
-)
 provides=('orchis-theme')
 conflicts=('orchis-theme' 'orchis-theme-git')
 source=("${pkgname}::git+https://github.com/vinceliuice/Orchis-theme.git")
