@@ -127,13 +127,17 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm --noprogressbar
-          pacman -S --noconfirm --needed --noprogressbar git
+          pacman -S --noconfirm --needed --noprogressbar git mold
 
           # x86-64-v3 with aggressive optimization
           sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3/g' /etc/makepkg.conf
 
           # Enable LTO
           sed -i 's/!lto/lto/' /etc/makepkg.conf
+
+          # Do not produce split -debug packages for this binary repo.
+          # Individual PKGBUILDs can still override this with options=('debug').
+          sed -i 's/ debug / !debug /' /etc/makepkg.conf
 
           # Parallel compilation
           NPROC=$(nproc)
