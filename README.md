@@ -30,11 +30,12 @@ sudo pacman -S <package-name>
 
 ## Available packages
 
-| Package          | Description (from `PKGBUILD`)                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `wayfreeze-git`  | `Tool to freeze the screen of a wayland compositor `                                       |
-| `lutgen-cli-git` | `A blazingly fast interpolated lut utility for arbitrary and popular color palettes (git)` |
-| `wl-screenrec`   | `High performance hardware accelerated wlroots screen recorder`                            |
+| Package             | Description (from `PKGBUILD`)                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `wayfreeze-git`     | `Tool to freeze the screen of a wayland compositor`                                       |
+| `lutgen-cli-git`    | `A blazingly fast interpolated lut utility for arbitrary and popular color palettes (git)` |
+| `wl-screenrec`      | `High performance hardware accelerated wlroots screen recorder`                            |
+| `xdg-terminal-exec` | `Proposed standard to launching desktop apps with Terminal=true`                           |
 
 ## Adding a package
 
