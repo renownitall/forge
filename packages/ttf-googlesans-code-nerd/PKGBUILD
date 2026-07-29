@@ -33,58 +33,42 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
 weights = [
-    ("Light", 300),
-    ("Regular", 400),
-    ("Medium", 500),
-    ("SemiBold", 600),
-    ("Bold", 700),
-    ("ExtraBold", 800),
+    ('Light', 300),
+    ('Regular', 400),
+    ('Medium', 500),
+    ('SemiBold', 600),
+    ('Bold', 700),
+    ('ExtraBold', 800),
 ]
 
 styles = []
 for name, wght in weights:
-    styles.append(
-        (
-            "GoogleSansCode[MONO,wght].ttf",
-            name,
-            wght,
-            {"wght": float(wght), "MONO": 1.0},
-        )
-    )
-    ital_name = "Italic" if name == "Regular" else f"{name}Italic"
-    styles.append(
-        (
-            "GoogleSansCode-Italic[MONO,wght].ttf",
-            ital_name,
-            wght,
-            {"wght": float(wght), "MONO": 1.0},
-        )
-    )
+    styles.append(('GoogleSansCode[MONO,wght].ttf', name, wght, {'wght': float(wght), 'MONO': 1.0}))
+    ital_name = 'Italic' if name == 'Regular' else f'{name}Italic'
+    styles.append(('GoogleSansCode-Italic[MONO,wght].ttf', ital_name, wght, {'wght': float(wght), 'MONO': 1.0}))
 
 for src_file, style_name, wght_class, axes in styles:
-    print(f"Instantiating {style_name} (weight {wght_class}) from {src_file}...")
+    print(f'Instantiating {style_name} (weight {wght_class}) from {src_file}...')
     var_font = TTFont(src_file)
-    if "BASE" in var_font:
-        del var_font["BASE"]
+    if 'BASE' in var_font:
+        del var_font['BASE']
     static_font = instantiateVariableFont(var_font, axes)
-
-    full_name = f"Google Sans Code {style_name}"
-    ps_name = f"GoogleSansCode-{style_name}"
-    for rec in static_font["name"].names:
+    
+    full_name = f'Google Sans Code {style_name}'
+    ps_name = f'GoogleSansCode-{style_name}'
+    for rec in static_font['name'].names:
         if rec.nameID == 2:
             rec.string = style_name.encode(rec.getEncoding())
         elif rec.nameID == 4:
             rec.string = full_name.encode(rec.getEncoding())
         elif rec.nameID == 6:
             rec.string = ps_name.encode(rec.getEncoding())
-
-    if "OS/2" in static_font:
-        static_font["OS/2"].usWeightClass = wght_class
-
-    static_font.save(
-        os.path.join("static_instances", f"GoogleSansCode-{style_name}.ttf")
-    )
-print("All 12 static TrueType font instances generated successfully.")
+            
+    if 'OS/2' in static_font:
+        static_font['OS/2'].usWeightClass = wght_class
+        
+    static_font.save(os.path.join('static_instances', f'GoogleSansCode-{style_name}.ttf'))
+print('All 12 static TrueType font instances generated successfully!')
 "
 
   # Patch the instantiated static TrueType fonts
