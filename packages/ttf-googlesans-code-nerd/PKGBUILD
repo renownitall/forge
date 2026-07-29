@@ -4,13 +4,13 @@ _gscver=7.001
 _nfver=3.4.0
 pkgver=7.001
 pkgrel=1
-pkgdesc="Official Google Sans Code monospace font, patched with Nerd Fonts (all weights 300-800, static TTF)"
+pkgdesc="Official Google Sans Code monospace font, patched with Nerd Fonts (all weights 300-800, NF/Mono/Propo static TTF)"
 arch=('any')
 url="https://github.com/googlefonts/googlesans-code"
 license=('OFL-1.1' 'MIT')
 depends=('fontconfig')
 makedepends=('fontforge' 'python' 'python-fonttools')
-provides=('ttf-font' 'nerd-fonts' 'ttf-googlesans-code-nerd' 'ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font')
+provides=('ttf-font' 'nerd-fonts' 'ttf-googlesans-code-nerd' 'ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-mono' 'ttf-googlesans-code-nerd-propo')
 conflicts=('ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-git')
 source=(
   "GoogleSansCode-v${_gscver}.zip::https://github.com/googlefonts/googlesans-code/releases/download/v${_gscver}/GoogleSansCode-v${_gscver}.zip"
@@ -53,7 +53,7 @@ for src_file, style_name, wght_class, axes in styles:
     if 'BASE' in var_font:
         del var_font['BASE']
     static_font = instantiateVariableFont(var_font, axes)
-    
+
     full_name = f'Google Sans Code {style_name}'
     ps_name = f'GoogleSansCode-{style_name}'
     for rec in static_font['name'].names:
@@ -63,19 +63,40 @@ for src_file, style_name, wght_class, axes in styles:
             rec.string = full_name.encode(rec.getEncoding())
         elif rec.nameID == 6:
             rec.string = ps_name.encode(rec.getEncoding())
-            
+
     if 'OS/2' in static_font:
         static_font['OS/2'].usWeightClass = wght_class
-        
+
     static_font.save(os.path.join('static_instances', f'GoogleSansCode-{style_name}.ttf'))
 print('All 12 static TrueType font instances generated successfully!')
 "
 
-  # Patch the instantiated static TrueType fonts
-  # Using --complete and --careful flags as recommended for standard Nerd Font releases
+  # 1. Patch Standard Nerd Font (double-width icons for compatible terminals)
   for _font in static_instances/GoogleSansCode-*.ttf; do
     python font-patcher "$_font" \
       --complete \
+      --careful \
+      --quiet \
+      --glyphdir "src/glyphs/" \
+      --outputdir "build"
+  done
+
+  # 2. Patch Nerd Font Mono (single-width icons for strict monospace terminals)
+  for _font in static_instances/GoogleSansCode-*.ttf; do
+    python font-patcher "$_font" \
+      --complete \
+      --mono \
+      --careful \
+      --quiet \
+      --glyphdir "src/glyphs/" \
+      --outputdir "build"
+  done
+
+  # 3. Patch Nerd Font Propo (proportional icons for GUI editors and apps)
+  for _font in static_instances/GoogleSansCode-*.ttf; do
+    python font-patcher "$_font" \
+      --complete \
+      --variable-width-glyphs \
       --careful \
       --quiet \
       --glyphdir "src/glyphs/" \
