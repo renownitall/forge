@@ -23,9 +23,8 @@ prepare() {
   sed -i 's/ffmpeg-sys-next = "8.0.1"/ffmpeg-sys-next = "8.1.0"/' Cargo.toml
 
   export RUSTUP_TOOLCHAIN=stable
-  # Update only the patched ffmpeg crates instead of refreshing the full lockfile.
-  cargo update -p ffmpeg-next --precise 8.1.0
-  cargo update -p ffmpeg-sys-next --precise 8.1.0
+  # Update lockfile to use 8.1.0 and latest vulkan fork commit (which already supports 8.1)
+  cargo update
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
