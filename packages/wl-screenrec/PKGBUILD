@@ -4,7 +4,7 @@ pkgrel=3
 pkgdesc="High performance hardware accelerated wlroots screen recorder"
 arch=('i686' 'x86_64' 'aarch64')
 url="https://github.com/russelltg/wl-screenrec"
-license=('APACHE')
+license=('Apache-2.0')
 provides=("wl-screenrec")
 makedepends=('cargo' 'clang' 'rust' 'vulkan-headers')
 depends=('ffmpeg' 'libva-driver' 'gcc-libs' 'glibc')
@@ -23,8 +23,9 @@ prepare() {
   sed -i 's/ffmpeg-sys-next = "8.0.1"/ffmpeg-sys-next = "8.1.0"/' Cargo.toml
 
   export RUSTUP_TOOLCHAIN=stable
-  # Update lockfile to use 8.1.0 and latest vulkan fork commit (which already supports 8.1)
-  cargo update
+  # Update only the patched ffmpeg crates instead of refreshing the full lockfile.
+  cargo update -p ffmpeg-next --precise 8.1.0
+  cargo update -p ffmpeg-sys-next --precise 8.1.0
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
