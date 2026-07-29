@@ -48,7 +48,7 @@ weights = [
 styles = []
 for name, wght in weights:
     styles.append(('GoogleSansCode[MONO,wght].ttf', name, wght, {'wght': float(wght), 'MONO': 1.0}))
-    ital_name = 'Italic' if name == 'Regular' else f'{name}Italic'
+    ital_name = 'Italic' if name == 'Regular' else f'{name} Italic'
     styles.append(('GoogleSansCode-Italic[MONO,wght].ttf', ital_name, wght, {'wght': float(wght), 'MONO': 1.0}))
 
 for src_file, style_name, wght_class, axes in styles:
@@ -59,7 +59,8 @@ for src_file, style_name, wght_class, axes in styles:
     static_font = instantiateVariableFont(var_font, axes)
 
     full_name = f'Google Sans Code {style_name}'
-    ps_name = f'GoogleSansCode-{style_name}'
+    ps_style_name = style_name.replace(' ', '')
+    ps_name = f'GoogleSansCode-{ps_style_name}'
     for rec in static_font['name'].names:
         if rec.nameID == 2:
             rec.string = style_name.encode(rec.getEncoding())
@@ -94,8 +95,8 @@ def run_patcher(task):
     subprocess.run(cmd, check=True)
     return f'Patched {os.path.basename(font_path)} ({label})'
 
-max_workers = os.cpu_count() or 4
-print(f'Starting parallel patching of {len(tasks)} font jobs across {max_workers} CPU cores...')
+max_workers = min(os.cpu_count() or 4, 4)
+print(f'Starting parallel patching of {len(tasks)} font jobs across {max_workers} worker(s)...')
 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
     for result in executor.map(run_patcher, tasks):
         print(f'  [OK] {result}')
