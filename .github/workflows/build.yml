@@ -150,8 +150,8 @@ jobs:
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
-          mkdir -p /home/builder/.cargo /home/builder/.gnupg
-          chown -R builder:builder /home/builder/.cargo /home/builder/.gnupg
+          mkdir -p /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
+          chown -R builder:builder /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
           chmod 700 /home/builder/.gnupg
 
       - name: Import GPG signing key
