@@ -30,12 +30,15 @@ sudo pacman -S <package-name>
 
 ## Available packages
 
-| Package             | Description                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `wayfreeze-git`     | Pauses your screen in place so you can draw a selection and take a screenshot without anything moving under your cursor |
-| `lutgen-cli-git`    | Recolors images (like wallpapers) to match a color theme such as Catppuccin, Gruvbox, or Nord                           |
-| `wl-screenrec`      | Records your screen to a video file using your GPU, so recording doesn't slow down your other apps                      |
-| `xdg-terminal-exec` | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use                   |
+| Package                    | Description                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `lutgen-cli-git`           | Recolors images (like wallpapers) to match a color theme such as Catppuccin, Gruvbox, or Nord                           |
+| `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones                                                |
+| `ttf-googlesans-code`      | Google Sans Code font (Google's monospace/coding font)                                                                  |
+| `ttf-googlesans-code-nerd` | Google Sans Code font patched with Nerd Font icons                                                                      |
+| `wayfreeze-git`            | Pauses your screen in place so you can draw a selection and take a screenshot without anything moving under your cursor |
+| `wl-screenrec`             | Records your screen to a video file using your GPU, so recording doesn't slow down your other apps                      |
+| `xdg-terminal-exec`        | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use                   |
 
 ## Adding a package
 
