@@ -28,7 +28,10 @@ build() {
   # instances across all 6 weights (300-800, upright and italic) and remove the BASE
   # table before running font-patcher.
   python -c "
+import concurrent.futures
+import glob
 import os
+import subprocess
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
@@ -53,7 +56,7 @@ for src_file, style_name, wght_class, axes in styles:
     if 'BASE' in var_font:
         del var_font['BASE']
     static_font = instantiateVariableFont(var_font, axes)
-
+    
     full_name = f'Google Sans Code {style_name}'
     ps_name = f'GoogleSansCode-{style_name}'
     for rec in static_font['name'].names:
@@ -63,45 +66,39 @@ for src_file, style_name, wght_class, axes in styles:
             rec.string = full_name.encode(rec.getEncoding())
         elif rec.nameID == 6:
             rec.string = ps_name.encode(rec.getEncoding())
-
+            
     if 'OS/2' in static_font:
         static_font['OS/2'].usWeightClass = wght_class
-
+        
     static_font.save(os.path.join('static_instances', f'GoogleSansCode-{style_name}.ttf'))
 print('All 12 static TrueType font instances generated successfully!')
+
+# Build parallel tasks for Standard Nerd Font, Nerd Font Mono, and Nerd Font Propo
+fonts = sorted(glob.glob('static_instances/GoogleSansCode-*.ttf'))
+tasks = []
+for font in fonts:
+    tasks.append((font, [], 'Nerd Font'))
+    tasks.append((font, ['--mono'], 'Nerd Font Mono'))
+    tasks.append((font, ['--variable-width-glyphs'], 'Nerd Font Propo'))
+
+def run_patcher(task):
+    font_path, extra_flags, label = task
+    cmd = [
+        'python', 'font-patcher', font_path,
+        '--complete', '--careful', '--quiet',
+        '--glyphdir', 'src/glyphs/',
+        '--outputdir', 'build'
+    ] + extra_flags
+    subprocess.run(cmd, check=True)
+    return f'Patched {os.path.basename(font_path)} ({label})'
+
+max_workers = os.cpu_count() or 4
+print(f'Starting parallel patching of {len(tasks)} font jobs across {max_workers} CPU cores...')
+with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+    for result in executor.map(run_patcher, tasks):
+        print(f'  [OK] {result}')
+print('All 36 Nerd Font files patched successfully in parallel!')
 "
-
-  # 1. Patch Standard Nerd Font (double-width icons for compatible terminals)
-  for _font in static_instances/GoogleSansCode-*.ttf; do
-    python font-patcher "$_font" \
-      --complete \
-      --careful \
-      --quiet \
-      --glyphdir "src/glyphs/" \
-      --outputdir "build"
-  done
-
-  # 2. Patch Nerd Font Mono (single-width icons for strict monospace terminals)
-  for _font in static_instances/GoogleSansCode-*.ttf; do
-    python font-patcher "$_font" \
-      --complete \
-      --mono \
-      --careful \
-      --quiet \
-      --glyphdir "src/glyphs/" \
-      --outputdir "build"
-  done
-
-  # 3. Patch Nerd Font Propo (proportional icons for GUI editors and apps)
-  for _font in static_instances/GoogleSansCode-*.ttf; do
-    python font-patcher "$_font" \
-      --complete \
-      --variable-width-glyphs \
-      --careful \
-      --quiet \
-      --glyphdir "src/glyphs/" \
-      --outputdir "build"
-  done
 }
 
 package() {
