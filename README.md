@@ -40,7 +40,6 @@ sudo pacman -S <package-name>
 | `ttf-googlesans-code`      | Google Sans Code font (Google's monospace/coding font)                                                                  |
 | `ttf-googlesans-code-nerd` | Google Sans Code font patched with Nerd Font icons                                                                      |
 | `wayfreeze-git`            | Pauses your screen in place so you can draw a selection and take a screenshot without anything moving under your cursor |
-| `wl-screenrec`             | Records your screen to a video file using your GPU, so recording doesn't slow down your other apps                      |
 | `xdg-terminal-exec`        | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use                   |
 
 ## Adding a package
