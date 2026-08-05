@@ -48,11 +48,17 @@ sudo pacman -S <package-name>
 2. Push to `main`.
 3. The workflow detects the new package, builds it, signs it, and deploys it automatically.
 
+## Removing a package
+
+1. Delete `packages/<package-name>/PKGBUILD`.
+2. Push to `main`.
+3. The workflow prunes the package's binaries and database entry from the published repository on the next run.
+
 ## How it works
 
 1. **`changed-packages`:** Determines which packages need rebuilding based on the trigger type and changed files.
 2. **`build`:** Builds each package in an Arch Linux container, signs it with GPG.
-3. **`repo`:** Collects all built packages, generates a signed `repo-add` database.
+3. **`repo`:** Collects all built packages, fetches the currently published ones, prunes packages removed from the source tree, and generates a signed `repo-add` database.
 4. **`deploy`:** Publishes the repository to GitHub Pages.
 
 Scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages.
