@@ -206,7 +206,12 @@ jobs:
           retention-days: 3
 
   repo:
-    needs: build
+    needs: [changed-packages, build]
+    # Run unless a needed job actually failed. This lets the repo job proceed
+    # when build was SKIPPED (e.g. a commit that only removes packages), so a
+    # pure-removal push still prunes the published repo and redeploys. We do
+    # NOT run when a build failed, to avoid publishing a partial repo.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base
@@ -242,6 +247,8 @@ jobs:
           rm -f "$KEY_FILE" "$PASS_FILE"
 
       - name: Download all package artifacts
+        # No artifacts exist when there is nothing to build (pure-removal push).
+        if: needs.changed-packages.outputs.has_packages == 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts/
@@ -271,8 +278,13 @@ jobs:
           # repo-add below would build a fresh DB containing only the artifacts
           # from this run, wiping every other package from the published repo.
           echo "Fetching existing repo file index from ${PAGES_URL}..."
-          if curl -fsSL --connect-timeout 15 --max-time 60 \
-               "${PAGES_URL}/${REPO_NAME}.files.tar.gz" -o /tmp/files.tar.gz; then
+          HTTP_CODE=$(curl -sSL --connect-timeout 15 --max-time 60 \
+            -o /tmp/files.tar.gz -w '%{http_code}' \
+            "${PAGES_URL}/${REPO_NAME}.files.tar.gz")
+          # Clear the prune/keep list up front so a failed or first-deploy fetch
+          # can never act on stale data from an earlier run.
+          : > /tmp/published.tsv
+          if [ "$HTTP_CODE" = "200" ]; then
             # Extract NAME, BASE and FILENAME for every package entry in the
             # published DB. Each desc member starts with %FILENAME%, so the
             # previous entry is flushed when the next one begins.
@@ -286,8 +298,11 @@ jobs:
                   /^%BASE%$/     { getline; base=$0; next }
                   END            { if (name != "" && base != "" && fn != "") print name "\t" base "\t" fn }
                 ' | sort -u > /tmp/published.tsv
-          else
+          elif [ "$HTTP_CODE" = "404" ]; then
             echo "  No existing repo found at ${PAGES_URL} (first deploy?)."
+          else
+            echo "::error::Failed to fetch existing repo index (HTTP ${HTTP_CODE}); aborting to avoid wiping published packages"
+            exit 1
           fi
 
           # Decide which published packages to retain, then fetch only those.
@@ -328,9 +343,12 @@ jobs:
 
           # Move the freshly built artifacts into repo/ alongside the fetched ones.
           # artifacts/ is created by actions/download-artifact in the previous step,
-          # relative to $GITHUB_WORKSPACE.
-          find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
-          find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
+          # relative to $GITHUB_WORKSPACE. It only exists when packages were built
+          # this run; on a pure-removal run it is absent, so skip it.
+          if [ -d ../artifacts ]; then
+            find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
+            find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
+          fi
 
           pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
           echo "Found ${pkg_count} package(s) total (existing + new):"
