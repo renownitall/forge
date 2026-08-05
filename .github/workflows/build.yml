@@ -251,6 +251,21 @@ jobs:
           mkdir -p repo
           cp signing_key.asc repo/
 
+          # Current source package base directories. A published package is
+          # retained only if its base is still defined here.
+          ALL_PACKAGES=$(ls -d packages/*/PKGBUILD 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} || echo "")
+
+          # makepkg.conf globally disables debug symbols (!debug). A -debug
+          # package is only expected when its PKGBUILD opts in. Returns true if
+          # a bare 'debug' appears in any options=()/options+=() array.
+          debug_opted_in() {
+            opts=$(tr -d '\n' < "packages/$1/PKGBUILD" \
+              | grep -oE 'options\+?=\([^)]*\)' \
+              | sed -E 's/^options\+?=//' \
+              | tr -d "()'\"" | tr -s ' ')
+            echo "$opts" | tr ' ' '\n' | grep -qx 'debug'
+          }
+
           # Pull the existing .files.tar.gz from the live Pages site so we can
           # enumerate which packages are already published. Without this step,
           # repo-add below would build a fresh DB containing only the artifacts
@@ -258,26 +273,53 @@ jobs:
           echo "Fetching existing repo file index from ${PAGES_URL}..."
           if curl -fsSL --connect-timeout 15 --max-time 60 \
                "${PAGES_URL}/${REPO_NAME}.files.tar.gz" -o /tmp/files.tar.gz; then
-            # Each desc entry has a %FILENAME% block; the line immediately
-            # after it is the actual .pkg.tar.zst filename.
-            EXISTING_PKGS=$(tar -xzOzf /tmp/files.tar.gz \
-              | awk '/^%FILENAME%$/{getline; print}' \
-              | sort -u)
-            echo "Discovered existing packages in live repo:"
-            echo "$EXISTING_PKGS" | sed 's/^/  /'
-
-            for pkg in $EXISTING_PKGS; do
-              [ -f "repo/$pkg" ] && continue
-              echo "  Fetching $pkg..."
-              curl -fsSL --connect-timeout 15 --max-time 120 \
-                "${PAGES_URL}/${pkg}"     -o "repo/$pkg"     \
-                || echo "    WARN: $pkg missing on Pages, will be dropped from DB"
-              curl -fsSL --connect-timeout 15 --max-time 30 \
-                "${PAGES_URL}/${pkg}.sig" -o "repo/$pkg.sig" \
-                || echo "    WARN: $pkg.sig missing on Pages"
-            done
+            # Extract NAME, BASE and FILENAME for every package entry in the
+            # published DB. Each desc member starts with %FILENAME%, so the
+            # previous entry is flushed when the next one begins.
+            tar -xzOzf /tmp/files.tar.gz --wildcards '*/desc' \
+              | awk '
+                  /^%FILENAME%$/ {
+                    if (name != "" && base != "" && fn != "") print name "\t" base "\t" fn
+                    name=""; base=""; fn=""; getline; fn=$0; next
+                  }
+                  /^%NAME%$/     { getline; name=$0; next }
+                  /^%BASE%$/     { getline; base=$0; next }
+                  END            { if (name != "" && base != "" && fn != "") print name "\t" base "\t" fn }
+                ' | sort -u > /tmp/published.tsv
           else
             echo "  No existing repo found at ${PAGES_URL} (first deploy?)."
+          fi
+
+          # Decide which published packages to retain, then fetch only those.
+          # Every version of a package whose base is still in the source tree is
+          # kept, so rebuilding or adding a package never prunes its older
+          # predecessors or unrelated packages. We prune only:
+          #   1. packages whose base was removed from packages/ (e.g. wl-screenrec)
+          #   2. -debug packages, since debug symbols are globally disabled in
+          #      makepkg.conf unless the PKGBUILD explicitly opts in.
+          if [ -s /tmp/published.tsv ]; then
+            while IFS=$'\t' read -r name base fn; do
+              keep=1; reason=""
+              if ! echo "$ALL_PACKAGES" | grep -qx "$base"; then
+                keep=0; reason="base '${base}' no longer in packages/"
+              elif [ "$name" = "${base}-debug" ]; then
+                if ! debug_opted_in "$base"; then
+                  keep=0; reason="debug disabled globally, '${base}' does not opt in"
+                fi
+              fi
+              if [ "$keep" != "1" ]; then
+                echo "  Prune     $fn  ($reason)"
+                continue
+              fi
+              [ -f "repo/$fn" ] && continue
+              echo "  Fetching $fn..."
+              curl -fsSL --connect-timeout 15 --max-time 120 \
+                "${PAGES_URL}/${fn}"     -o "repo/$fn"     \
+                || echo "    WARN: $fn missing on Pages, will be dropped from DB"
+              curl -fsSL --connect-timeout 15 --max-time 30 \
+                "${PAGES_URL}/${fn}.sig" -o "repo/$fn.sig" \
+                || echo "    WARN: $fn.sig missing on Pages"
+            done < /tmp/published.tsv
           fi
 
       - name: Build repository database
@@ -301,9 +343,9 @@ jobs:
           # repo-add updates each matching entry in place when re-adding a
           # package that already exists in the DB, so rebuilt packages get
           # their metadata refreshed while all other entries are preserved.
-          # --remove only deletes DB entries whose .pkg.tar.zst file is
-          # missing from disk — since we fetched all existing files above,
-          # nothing legitimate will be removed.
+          # --remove deletes DB entries whose .pkg.tar.zst file is missing
+          # from disk — pruned packages were never fetched above, so their
+          # entries (and files) are dropped, while kept predecessors remain.
           repo-add --remove --sign "${REPO_NAME}.db.tar.gz" *.pkg.tar.zst
 
           # Replace symlinks with copies for GitHub Pages
@@ -336,3 +378,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
