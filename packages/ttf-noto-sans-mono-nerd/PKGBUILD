@@ -25,7 +25,7 @@ build() {
   mkdir -p build static_instances
 
   # Copy static TTF instances from the release zip
-  cp NotoSansMono-v${_nsmver}/*.ttf static_instances/ || true
+  cp NotoSansMono/googlefonts/ttf/*.ttf static_instances/
 
   python - <<'PYEOF'
 import concurrent.futures
@@ -64,7 +64,7 @@ PYEOF
 package() {
   cd "$srcdir"
   install -Dm644 build/*.ttf -t "$pkgdir/usr/share/fonts/TTF/"
-  install -Dm644 OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+  install -Dm644 NotoSansMono/OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
   # Install per-glyph-source licenses shipped inside FontPatcher.zip.
   find src/glyphs -maxdepth 2 -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \) -print0 |
     while IFS= read -r -d '' lic; do
