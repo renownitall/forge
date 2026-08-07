@@ -6,6 +6,7 @@ on:
     paths:
       - "packages/**"
       - ".github/workflows/build.yml"
+      - ".github/actions/**"
   workflow_dispatch:
   schedule:
     - cron: "37 4 * * *"
@@ -15,10 +16,6 @@ env:
   PAGES_URL: https://renownitall.github.io/forge
 
 permissions: {}
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   changed-packages:
@@ -92,10 +89,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Setup build user
+        run: |
+          # Create user before caching to ensure correct directory ownership
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          mkdir -p /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
+          chown -R builder:builder /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
+          chmod 700 /home/builder/.gnupg
+
       - name: Check if package needs Rust
         id: check-rust
         run: |
-          if grep -qiE 'cargo|rust' "packages/${{ matrix.package }}/PKGBUILD"; then
+          # More precise regex to avoid false positives from comments/descriptions
+          if grep -qE '^\s*(makedepends|depends)=.*rust' "packages/${{ matrix.package }}/PKGBUILD" || \
+             grep -qE '^\s*build\(\).*cargo' "packages/${{ matrix.package }}/PKGBUILD"; then
             echo "needs_rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "needs_rust=false" >> "$GITHUB_OUTPUT"
@@ -127,63 +136,27 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm --noprogressbar
-          pacman -S --noconfirm --needed --noprogressbar git mold
+          pacman -S --noconfirm --needed --noprogressbar git mold pacman-contrib
 
-          # x86-64-v3 with aggressive optimization
           sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3/g' /etc/makepkg.conf
-
-          # Enable LTO
           sed -i 's/!lto/lto/' /etc/makepkg.conf
-
-          # Do not produce split -debug packages for this binary repo.
-          # Individual PKGBUILDs can still override this with options=('debug').
           sed -i 's/ debug / !debug /' /etc/makepkg.conf
 
-          # Parallel compilation
           NPROC=$(nproc)
           sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j${NPROC}\"/" /etc/makepkg.conf
 
-          # Rust flags
           cat >> /etc/makepkg.conf <<'EOF'
           RUSTFLAGS="-C target-cpu=x86-64-v3 -C opt-level=3 -C link-arg=-fuse-ld=mold"
           EOF
 
-          # Faster zstd compression with threading
           sed -i "s/COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q --threads=0 -19 -)/" /etc/makepkg.conf
 
-          # Create non-root builder
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          mkdir -p /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
-          chown -R builder:builder /home/builder/.cargo /home/builder/.gnupg /home/builder/.cache
-          chmod 700 /home/builder/.gnupg
-
-      - name: Import GPG signing key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          KEY_FILE=$(mktemp)
-          PASS_FILE=$(mktemp)
-          echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
-          echo "$GPG_PASSPHRASE" > "$PASS_FILE"
-          chmod 600 "$KEY_FILE" "$PASS_FILE"
-          chown builder:builder "$KEY_FILE" "$PASS_FILE"
-
-          # 1. Configure agent BEFORE doing anything else
-          su builder -c "mkdir -p /home/builder/.gnupg && chmod 700 /home/builder/.gnupg"
-          su builder -c "echo 'allow-preset-passphrase' > /home/builder/.gnupg/gpg-agent.conf"
-
-          # 2. Import key (this auto-starts the agent reading the new config)
-          su builder -c "gpg --batch --import $KEY_FILE"
-          su builder -c "gpg-connect-agent reloadagent /bye"
-
-          # 3. Preset the passphrase
-          KEYGRIP=$(su builder -c "gpg --list-secret-keys --with-keygrip --with-colons" | awk -F: '/^grp/ {print $10; exit}')
-          su builder -c "cat $PASS_FILE | /usr/lib/gnupg/gpg-preset-passphrase --preset $KEYGRIP"
-
-          rm -f "$KEY_FILE" "$PASS_FILE"
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          user: builder
 
       - name: Build ${{ matrix.package }}
         run: |
@@ -205,12 +178,12 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+      - name: Clean pacman cache
+        if: always()
+        run: paccache -r -u -k 0 || true
+
   repo:
     needs: [changed-packages, build]
-    # Run unless a needed job actually failed. This lets the repo job proceed
-    # when build was SKIPPED (e.g. a commit that only removes packages), so a
-    # pure-removal push still prunes the published repo and redeploys. We do
-    # NOT run when a build failed, to avoid publishing a partial repo.
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     container:
@@ -219,35 +192,23 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install repo tools
-        run: pacman -Syu --noconfirm --noprogressbar
-
-      - name: Import GPG signing key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          KEY_FILE=$(mktemp)
-          PASS_FILE=$(mktemp)
-          echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
-          echo "$GPG_PASSPHRASE" > "$PASS_FILE"
-          chmod 600 "$KEY_FILE" "$PASS_FILE"
+          pacman-key --init
+          pacman-key --populate archlinux
+          # devtools provides repo-add; pacman-contrib provides paccache
+          pacman -Syu --noconfirm --noprogressbar devtools pacman-contrib
 
-          mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
-          echo 'allow-preset-passphrase' > ~/.gnupg/gpg-agent.conf
-
-          gpg --batch --import "$KEY_FILE"
-          gpg-connect-agent reloadagent /bye
-
-          KEYGRIP=$(gpg --list-secret-keys --with-keygrip --with-colons | awk -F: '/^grp/ {print $10; exit}')
-          cat "$PASS_FILE" | /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
-
-          rm -f "$KEY_FILE" "$PASS_FILE"
+      - name: Setup GPG
+        uses: ./.github/actions/setup-gpg
+        with:
+          private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          user: root
 
       - name: Download all package artifacts
-        # No artifacts exist when there is nothing to build (pure-removal push).
         if: needs.changed-packages.outputs.has_packages == 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -256,15 +217,10 @@ jobs:
       - name: Fetch existing repository packages
         run: |
           mkdir -p repo
-          cp signing_key.asc repo/
+          cp signing_key.asc repo/ 2>/dev/null || true
 
-          # Current source package base directories. A published package is
-          # retained only if its base is still defined here.
           ALL_PACKAGES=$(ls -d packages/*/PKGBUILD 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} || echo "")
 
-          # makepkg.conf globally disables debug symbols (!debug). A -debug
-          # package is only expected when its PKGBUILD opts in. Returns true if
-          # a bare 'debug' appears in any options=()/options+=() array.
           debug_opted_in() {
             opts=$(tr -d '\n' < "packages/$1/PKGBUILD" \
               | grep -oE 'options\+?=\([^)]*\)' \
@@ -273,21 +229,13 @@ jobs:
             echo "$opts" | tr ' ' '\n' | grep -qx 'debug'
           }
 
-          # Pull the existing .files.tar.gz from the live Pages site so we can
-          # enumerate which packages are already published. Without this step,
-          # repo-add below would build a fresh DB containing only the artifacts
-          # from this run, wiping every other package from the published repo.
           echo "Fetching existing repo file index from ${PAGES_URL}..."
           HTTP_CODE=$(curl -sSL --connect-timeout 15 --max-time 60 \
             -o /tmp/files.tar.gz -w '%{http_code}' \
             "${PAGES_URL}/${REPO_NAME}.files.tar.gz")
-          # Clear the prune/keep list up front so a failed or first-deploy fetch
-          # can never act on stale data from an earlier run.
+
           : > /tmp/published.tsv
           if [ "$HTTP_CODE" = "200" ]; then
-            # Extract NAME, BASE and FILENAME for every package entry in the
-            # published DB. Each desc member starts with %FILENAME%, so the
-            # previous entry is flushed when the next one begins.
             tar -xzOzf /tmp/files.tar.gz --wildcards '*/desc' \
               | awk '
                   /^%FILENAME%$/ {
@@ -305,13 +253,6 @@ jobs:
             exit 1
           fi
 
-          # Decide which published packages to retain, then fetch only those.
-          # Every version of a package whose base is still in the source tree is
-          # kept, so rebuilding or adding a package never prunes its older
-          # predecessors or unrelated packages. We prune only:
-          #   1. packages whose base was removed from packages/ (e.g. wl-screenrec)
-          #   2. -debug packages, since debug symbols are globally disabled in
-          #      makepkg.conf unless the PKGBUILD explicitly opts in.
           if [ -s /tmp/published.tsv ]; then
             while IFS=$'\t' read -r name base fn; do
               keep=1; reason=""
@@ -341,10 +282,6 @@ jobs:
         run: |
           cd repo
 
-          # Move the freshly built artifacts into repo/ alongside the fetched ones.
-          # artifacts/ is created by actions/download-artifact in the previous step,
-          # relative to $GITHUB_WORKSPACE. It only exists when packages were built
-          # this run; on a pure-removal run it is absent, so skip it.
           if [ -d ../artifacts ]; then
             find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
             find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
@@ -358,15 +295,8 @@ jobs:
             exit 1
           fi
 
-          # repo-add updates each matching entry in place when re-adding a
-          # package that already exists in the DB, so rebuilt packages get
-          # their metadata refreshed while all other entries are preserved.
-          # --remove deletes DB entries whose .pkg.tar.zst file is missing
-          # from disk — pruned packages were never fetched above, so their
-          # entries (and files) are dropped, while kept predecessors remain.
           repo-add --remove --sign "${REPO_NAME}.db.tar.gz" *.pkg.tar.zst
 
-          # Replace symlinks with copies for GitHub Pages
           for link in "${REPO_NAME}.db" "${REPO_NAME}.db.sig" "${REPO_NAME}.files" "${REPO_NAME}.files.sig"; do
             if [ -L "$link" ]; then
               target=$(readlink "$link")
@@ -392,8 +322,10 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: "pages"
+      cancel-in-progress: true
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
-

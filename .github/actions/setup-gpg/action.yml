@@ -1,0 +1,54 @@
+name: "Setup GPG"
+description: "Imports GPG key and presets passphrase for makepkg/repo-add"
+inputs:
+  private-key:
+    description: "GPG Private Key"
+    required: true
+  passphrase:
+    description: "GPG Passphrase"
+    required: true
+  user:
+    description: "User to run GPG as (e.g., builder or root)"
+    default: "root"
+runs:
+  using: "composite"
+  steps:
+    - name: Import GPG and preset passphrase
+      shell: bash
+      env:
+        GPG_PRIVATE_KEY: ${{ inputs.private-key }}
+        GPG_PASSPHRASE: ${{ inputs.passphrase }}
+        TARGET_USER: ${{ inputs.user }}
+      run: |
+        set -euo pipefail
+
+        KEY_FILE=$(mktemp)
+        PASS_FILE=$(mktemp)
+        echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
+        echo "$GPG_PASSPHRASE" > "$PASS_FILE"
+        chmod 600 "$KEY_FILE" "$PASS_FILE"
+
+        if [ "$TARGET_USER" != "root" ]; then
+          chown "$TARGET_USER:$TARGET_USER" "$KEY_FILE" "$PASS_FILE"
+          RUN_AS="su $TARGET_USER -c"
+          HOME_DIR=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+        else
+          RUN_AS="bash -c"
+          HOME_DIR="$HOME"
+        fi
+
+        # 1. Configure agent
+        $RUN_AS "mkdir -p $HOME_DIR/.gnupg && chmod 700 $HOME_DIR/.gnupg"
+        $RUN_AS "echo 'allow-preset-passphrase' > $HOME_DIR/.gnupg/gpg-agent.conf"
+
+        # 2. Import key and reload agent
+        $RUN_AS "gpg --batch --import $KEY_FILE"
+        $RUN_AS "gpg-connect-agent --verbose reloadagent /bye"
+
+        # 3. Preset passphrase dynamically finding the libexec dir
+        KEYGRIP=$($RUN_AS "gpg --list-secret-keys --with-keygrip --with-colons" | awk -F: '/^grp/ {print $10; exit}')
+        PRESET_PASSPHRASE=$($RUN_AS "gpgconf --list-dirs libexecdir")/gpg-preset-passphrase
+
+        $RUN_AS "cat $PASS_FILE | $PRESET_PASSPHRASE --preset $KEYGRIP"
+
+        rm -f "$KEY_FILE" "$PASS_FILE"
