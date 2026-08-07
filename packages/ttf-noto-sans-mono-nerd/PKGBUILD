@@ -1,0 +1,74 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+pkgname=ttf-noto-sans-mono-nerd
+_nsmver=2.014
+_nfver=3.4.0
+pkgver=${_nsmver}.nf${_nfver}
+pkgrel=1
+pkgdesc="Noto Sans Mono font patched with Nerd Fonts (all weights, NF/Mono/Propo static TTF)"
+arch=('any')
+url="https://github.com/notofonts/latin-greek-cyrillic"
+license=('OFL-1.1' 'MIT')
+depends=('fontconfig')
+makedepends=('fontforge' 'python' 'python-fonttools')
+provides=('ttf-font' 'nerd-fonts' 'ttf-noto-sans-mono-nerd' 'ttf-noto-sans-mono-nf')
+conflicts=('ttf-noto-sans-mono-nerd-git')
+source=(
+  "NotoSansMono-v${_nsmver}.zip::https://github.com/notofonts/latin-greek-cyrillic/releases/download/NotoSansMono-v${_nsmver}/NotoSansMono-v${_nsmver}.zip"
+  "FontPatcher-${_nfver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${_nfver}/FontPatcher.zip"
+)
+sha256sums=('SKIP'
+  'a8f11e511ed7c69e96680858c06b50a643ea7752e26d5cd13dd5e5cc53ab1760')
+
+build() {
+  cd "$srcdir"
+  rm -rf build static_instances
+  mkdir -p build static_instances
+
+  # Copy static TTF instances from the release zip
+  cp NotoSansMono-v${_nsmver}/*.ttf static_instances/ || true
+
+  python - <<'PYEOF'
+import concurrent.futures
+import glob
+import os
+import subprocess
+
+# Build parallel tasks for Standard Nerd Font, Nerd Font Mono, and Nerd Font Propo
+fonts = sorted(glob.glob('static_instances/NotoSansMono-*.ttf'))
+tasks = []
+for font in fonts:
+    tasks.append((font, [], 'Nerd Font'))
+    tasks.append((font, ['--mono'], 'Nerd Font Mono'))
+    tasks.append((font, ['--variable-width-glyphs'], 'Nerd Font Propo'))
+
+def run_patcher(task):
+    font_path, extra_flags, label = task
+    cmd = [
+        'python', 'font-patcher', font_path,
+        '--complete', '--careful', '--quiet',
+        '--glyphdir', 'src/glyphs/',
+        '--outputdir', 'build'
+    ] + extra_flags
+    subprocess.run(cmd, check=True)
+    return f'Patched {os.path.basename(font_path)} ({label})'
+
+max_workers = min(os.cpu_count() or 4, 4)
+print(f'Starting parallel patching of {len(tasks)} font jobs across {max_workers} worker(s)...')
+with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    for result in executor.map(run_patcher, tasks):
+        print(f'  [OK] {result}')
+print('All Nerd Font files patched successfully in parallel!')
+PYEOF
+}
+
+package() {
+  cd "$srcdir"
+  install -Dm644 build/*.ttf -t "$pkgdir/usr/share/fonts/TTF/"
+  install -Dm644 OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
+  # Install per-glyph-source licenses shipped inside FontPatcher.zip.
+  find src/glyphs -maxdepth 2 -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \) -print0 |
+    while IFS= read -r -d '' lic; do
+      subdir=$(dirname "$lic" | tr / _)
+      install -Dm644 "$lic" "$pkgdir/usr/share/licenses/$pkgname/${subdir}_$(basename "$lic")"
+    done
+}
