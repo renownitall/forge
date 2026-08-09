@@ -1,121 +1,19 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 pkgname=ttf-googlesans-code-nerd
-_gscver=7.001
-_nfver=3.4.0
-pkgver=${_gscver}.nf${_nfver}
+pkgver=3.5.0
 pkgrel=1
-pkgdesc="Official Google Sans Code monospace font, patched with Nerd Fonts (all weights 300-800, NF/Mono/Propo static TTF)"
+pkgdesc="Google Sans Code font patched with Nerd Fonts (all weights 300-800, NF/Mono/Propo static TTF)"
 arch=('any')
-url="https://github.com/googlefonts/googlesans-code"
-license=('OFL-1.1' 'MIT')
+url="https://github.com/ryanoasis/nerd-fonts"
+license=('OFL-1.1')
 depends=('fontconfig')
-makedepends=('fontforge' 'python' 'python-fonttools')
 provides=('ttf-font' 'nerd-fonts' 'ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-mono' 'ttf-googlesans-code-nerd-propo')
 conflicts=('ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-git')
-source=(
-  "GoogleSansCode-v${_gscver}.zip::https://github.com/googlefonts/googlesans-code/releases/download/v${_gscver}/GoogleSansCode-v${_gscver}.zip"
-  "FontPatcher-${_nfver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${_nfver}/FontPatcher.zip"
-)
-sha256sums=('eebba2a438882396e8530cad6d6cb80182b0afb6e9e0ad07b7340359a53ba2e9'
-  'a8f11e511ed7c69e96680858c06b50a643ea7752e26d5cd13dd5e5cc53ab1760')
-
-build() {
-  cd "$srcdir"
-  rm -rf build static_instances
-  mkdir -p build static_instances
-
-  # FontForge does not support OpenType Variable Fonts (VFs) and corrupts their BASE
-  # and kerning tables when patched directly. We instantiate clean static TrueType
-  # instances across all 6 weights (300-800, upright and italic) and remove the BASE
-  # table before running font-patcher.
-  python - <<'PYEOF'
-import concurrent.futures
-import glob
-import os
-import subprocess
-from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
-
-weights = [
-    ('Light', 300),
-    ('Regular', 400),
-    ('Medium', 500),
-    ('SemiBold', 600),
-    ('Bold', 700),
-    ('ExtraBold', 800),
-]
-
-styles = []
-for name, wght in weights:
-    styles.append(('GoogleSansCode[MONO,wght].ttf', name, wght, {'wght': float(wght), 'MONO': 1.0}))
-    ital_name = 'Italic' if name == 'Regular' else f'{name} Italic'
-    styles.append(('GoogleSansCode-Italic[MONO,wght].ttf', ital_name, wght, {'wght': float(wght), 'MONO': 1.0}))
-
-for src_file, style_name, wght_class, axes in styles:
-    print(f'Instantiating {style_name} (weight {wght_class}) from {src_file}...')
-    var_font = TTFont(src_file)
-    if 'BASE' in var_font:
-        del var_font['BASE']
-    static_font = instantiateVariableFont(var_font, axes)
-
-    full_name = f'Google Sans Code {style_name}'
-    ps_style_name = style_name.replace(' ', '')
-    ps_name = f'GoogleSansCode-{ps_style_name}'
-    for rec in static_font['name'].names:
-        if rec.nameID == 2:
-            rec.string = style_name.encode(rec.getEncoding())
-        elif rec.nameID == 4:
-            rec.string = full_name.encode(rec.getEncoding())
-        elif rec.nameID == 6:
-            rec.string = ps_name.encode(rec.getEncoding())
-
-    if 'OS/2' in static_font:
-        static_font['OS/2'].usWeightClass = wght_class
-
-    static_font.save(os.path.join('static_instances', f'GoogleSansCode-{style_name}.ttf'))
-
-print('All 12 static TrueType font instances generated successfully!')
-
-# Build parallel tasks for Standard Nerd Font, Nerd Font Mono, and Nerd Font Propo
-fonts = sorted(glob.glob('static_instances/GoogleSansCode-*.ttf'))
-tasks = []
-for font in fonts:
-    tasks.append((font, [], 'Nerd Font'))
-    tasks.append((font, ['--mono'], 'Nerd Font Mono'))
-    tasks.append((font, ['--variable-width-glyphs'], 'Nerd Font Propo'))
-
-def run_patcher(task):
-    font_path, extra_flags, label = task
-    cmd = [
-        'python', 'font-patcher', font_path,
-        '--complete', '--careful', '--quiet',
-        '--glyphdir', 'src/glyphs/',
-        '--outputdir', 'build'
-    ] + extra_flags
-    subprocess.run(cmd, check=True)
-    return f'Patched {os.path.basename(font_path)} ({label})'
-
-max_workers = min(os.cpu_count() or 4, 4)
-print(f'Starting parallel patching of {len(tasks)} font jobs across {max_workers} worker(s)...')
-with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-    for result in executor.map(run_patcher, tasks):
-        print(f'  [OK] {result}')
-print('All 36 Nerd Font files patched successfully in parallel!')
-PYEOF
-}
+source=("GoogleSansCode-${pkgver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${pkgver}/GoogleSansCode.zip")
+sha256sums=('524485e914b365b04c8e443773e43cbc43786f64b44131f0efe26166db12b1af')
 
 package() {
   cd "$srcdir"
-  install -Dm644 build/*.ttf -t "$pkgdir/usr/share/fonts/TTF/"
+  install -Dm644 *.ttf -t "$pkgdir/usr/share/fonts/TTF/"
   install -Dm644 OFL.txt -t "$pkgdir/usr/share/licenses/$pkgname/"
-  # Install per-glyph-source licenses shipped inside FontPatcher.zip.
-  # The patcher embeds glyphs from many upstream icon sets (codicons,
-  # octicons, devicons, pomicons, powerline-symbols, ...), each with its
-  # own license text. Upstream FontPatcher.zip has no top-level LICENSE
-  # file, so we collect every src/glyphs/*/LICENSE* we can find.
-  find src/glyphs -maxdepth 2 -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \) -print0 \
-    | while IFS= read -r -d '' lic; do
-        subdir=$(dirname "$lic" | tr / _)
-        install -Dm644 "$lic" "$pkgdir/usr/share/licenses/$pkgname/${subdir}_$(basename "$lic")"
-      done
 }
