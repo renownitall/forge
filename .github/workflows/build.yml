@@ -258,6 +258,8 @@ jobs:
               keep=1; reason=""
               if ! echo "$ALL_PACKAGES" | grep -qx "$base"; then
                 keep=0; reason="base '${base}' no longer in packages/"
+              elif [ -d "artifacts/$base" ]; then
+                keep=0; reason="rebuilt this run, dropping previously published '${name}'"
               elif [ "$name" = "${base}-debug" ]; then
                 if ! debug_opted_in "$base"; then
                   keep=0; reason="debug disabled globally, '${base}' does not opt in"
@@ -286,6 +288,11 @@ jobs:
             find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
             find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
           fi
+
+          shopt -s nullglob
+          for f in *__EPOCH__*; do
+            mv -- "$f" "${f//__EPOCH__/:}"
+          done
 
           pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
           echo "Found ${pkg_count} package(s) total (existing + new):"
@@ -329,3 +336,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
