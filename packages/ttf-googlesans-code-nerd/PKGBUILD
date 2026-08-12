@@ -2,6 +2,7 @@
 pkgname=ttf-googlesans-code-nerd
 pkgver=3.5.0
 pkgrel=1
+epoch=1
 pkgdesc="Google Sans Code font patched with Nerd Fonts (all weights 300-800, NF/Mono/Propo static TTF)"
 arch=('any')
 url="https://github.com/ryanoasis/nerd-fonts"
