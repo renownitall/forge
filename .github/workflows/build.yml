@@ -168,13 +168,30 @@ jobs:
           ls packages/${{ matrix.package }}/*.pkg.tar.zst
           ls packages/${{ matrix.package }}/*.pkg.tar.zst.sig
 
+      - name: Stage packages for artifact upload
+        run: |
+          stage="$GITHUB_WORKSPACE/artifact-stage"
+          src="$GITHUB_WORKSPACE/packages/${{ matrix.package }}"
+          mkdir -p "$stage"
+          shopt -s nullglob
+          files=( "$src"/*.pkg.tar.zst "$src"/*.pkg.tar.zst.sig )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No package files in $src"
+            exit 1
+          fi
+          tar -C "$src" -cf "$stage/pkg.tar" -- "${files[@]##*/}"
+          tar -tf "$stage/pkg.tar"
+          if find "$stage" -name '*:*' | grep -q .; then
+            echo "::error::Staged artifact path still contains a colon"
+            find "$stage" -print
+            exit 1
+          fi
+
       - name: Upload package artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.package }}
-          path: |
-            packages/${{ matrix.package }}/*.pkg.tar.zst
-            packages/${{ matrix.package }}/*.pkg.tar.zst.sig
+          path: artifact-stage/pkg.tar
           if-no-files-found: error
           retention-days: 3
 
@@ -285,14 +302,10 @@ jobs:
           cd repo
 
           if [ -d ../artifacts ]; then
+            find ../artifacts/ -name pkg.tar -exec tar -xf {} \;
             find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
             find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
           fi
-
-          shopt -s nullglob
-          for f in *__EPOCH__*; do
-            mv -- "$f" "${f//__EPOCH__/:}"
-          done
 
           pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
           echo "Found ${pkg_count} package(s) total (existing + new):"
