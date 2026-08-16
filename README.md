@@ -2,7 +2,7 @@
 
 Hi.
 
-This is my custom Arch Linux package repository. It's built with GitHub Actions and served via GitHub Pages.
+This is my custom Arch Linux package repo. It's built with GitHub Actions and served via GitHub Pages.
 
 All packages are compiled with `x86-64-v3` optimizations and signed with GPG.
 
