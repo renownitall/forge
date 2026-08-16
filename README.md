@@ -1,11 +1,13 @@
 # Forge
 
-My custom Arch Linux package repository, built with GitHub Actions and served via GitHub Pages.
+Hi.
+
+This is my custom Arch Linux package repository. It's built with GitHub Actions and served via GitHub Pages.
 
 All packages are compiled with `x86-64-v3` optimizations and signed with GPG.
 
 > [!WARNING]
-> Binary packages in this repository require an `x86-64-v3` capable CPU. They may not run on older generic `x86_64` machines.
+> Binary packages in this repo need an `x86-64-v3` capable CPU. They may not run on older generic `x86_64` machines.
 
 ## Setup
 
