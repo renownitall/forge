@@ -39,26 +39,15 @@ Set up the repository by following these steps:
 
 The following packages are available:
 
-`lutgen-cli-git`
-: Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.
-
-`orchis-theme-square`
-: Orchis GTK theme built with fully square corners instead of rounded ones.
-
-`ttf-googlesans-code`
-: Google Sans Code, Google's monospace coding font.
-
-`ttf-googlesans-code-nerd`
-: Google Sans Code patched with Nerd Font icons.
-
-`ttf-noto-sans-mono-nerd`
-: Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TTF variants.
-
-`wayfreeze-git`
-: Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor.
-
-`xdg-terminal-exec`
-: Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.
+| Package                    | Description                                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `lutgen-cli-git`           | Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.                  |
+| `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones.                                       |
+| `ttf-googlesans-code`      | Google Sans Code, Google's monospace coding font.                                                               |
+| `ttf-googlesans-code-nerd` | Google Sans Code patched with Nerd Font icons.                                                                  |
+| `ttf-noto-sans-mono-nerd`  | Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TTF variants.            |
+| `wayfreeze-git`            | Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor. |
+| `xdg-terminal-exec`        | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.          |
 
 ## Add a package
 
@@ -80,17 +69,12 @@ Remove a package by following these steps:
 
 A GitHub Actions workflow with the following jobs builds and publishes the repository:
 
-`changed-packages`
-: Determines which packages need rebuilding based on the trigger type and changed files.
-
-`build`
-: Builds each package in an Arch Linux container and signs it with GPG.
-
-`repo`
-: Collects the built packages, fetches the ones already published, prunes packages removed from the source tree, and generates a signed `repo-add` database.
-
-`deploy`
-: Publishes the repository to GitHub Pages.
+| Job                | Purpose                                                                                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `changed-packages` | Determines which packages need rebuilding based on the trigger type and changed files.                                                                     |
+| `build`            | Builds each package in an Arch Linux container and signs it with GPG.                                                                                      |
+| `repo`             | Collects the built packages, fetches the ones already published, prunes packages removed from the source tree, and generates a signed `repo-add` database. |
+| `deploy`           | Publishes the repository to GitHub Pages.                                                                                                                  |
 
 Scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages.
 
