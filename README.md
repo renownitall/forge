@@ -2,67 +2,95 @@
 
 Hi.
 
-This is my custom Arch Linux package repo. It's built with GitHub Actions and served via GitHub Pages.
+This is a custom Arch Linux package repository. All packages are compiled with `x86-64-v3` optimizations and signed with GNU Privacy Guard (GPG). A GitHub Actions workflow builds, signs, and publishes the packages, and GitHub Pages hosts the published repository. If you run Arch Linux, you can install these packages with `pacman`.
 
-All packages are compiled with `x86-64-v3` optimizations and signed with GPG.
+> [!CAUTION]
+> The packages in this repository need an `x86-64-v3` capable CPU. They might not run on older generic `x86_64` machines.
 
-> [!WARNING]
-> Binary packages in this repo need an `x86-64-v3` capable CPU. They may not run on older generic `x86_64` machines.
+## Set up the repository
 
-## Setup
+Set up the repository by following these steps:
 
-Import the signing key:
+1. Import and trust the signing key by running the following commands:
 
-```bash
-sudo pacman-key --add <(curl -fsSL https://renownitall.github.io/forge/signing_key.asc)
-sudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5
-```
+   ```bash
+   sudo pacman-key --add <(curl -fsSL https://renownitall.github.io/forge/signing_key.asc)
+   sudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5
+   ```
 
-Add the repository to `/etc/pacman.conf`:
+2. Add the following block to `/etc/pacman.conf`:
 
-```ini
-[forge]
-SigLevel = Required DatabaseOptional
-Server = https://renownitall.github.io/forge
-```
+   ```ini
+   [forge]
+   SigLevel = Required DatabaseOptional
+   Server = https://renownitall.github.io/forge
+   ```
 
-Sync and install packages:
+3. Sync your system and install a package by running the following commands:
 
-```bash
-sudo pacman -Syu
-sudo pacman -S <package-name>
-```
+   ```bash
+   sudo pacman -Syu
+   sudo pacman -S PACKAGE_NAME
+   ```
+
+   Replace `PACKAGE_NAME` with the name of the package you want to install, for example `lutgen-cli-git`.
 
 ## Available packages
 
-| Package                    | Description                                                                                                             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `lutgen-cli-git`           | Recolors images (like wallpapers) to match a color theme such as Catppuccin, Gruvbox, or Nord                           |
-| `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones                                                |
-| `ttf-googlesans-code`      | Google Sans Code font (Google's monospace/coding font)                                                                  |
-| `ttf-googlesans-code-nerd` | Google Sans Code font patched with Nerd Font icons                                                                      |
-| `ttf-noto-sans-mono-nerd`  | Noto Sans Mono font patched with Nerd Fonts (all weights, NF/Mono/Propo static TTF)                                     |
-| `wayfreeze-git`            | Pauses your screen in place so you can draw a selection and take a screenshot without anything moving under your cursor |
-| `xdg-terminal-exec`        | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use                   |
+The following packages are available:
 
-## Adding a package
+`lutgen-cli-git`
+: Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.
 
-1. Create `packages/<package-name>/PKGBUILD`.
-2. Push to `main`.
+`orchis-theme-square`
+: Orchis GTK theme built with fully square corners instead of rounded ones.
+
+`ttf-googlesans-code`
+: Google Sans Code, Google's monospace coding font.
+
+`ttf-googlesans-code-nerd`
+: Google Sans Code patched with Nerd Font icons.
+
+`ttf-noto-sans-mono-nerd`
+: Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TTF variants.
+
+`wayfreeze-git`
+: Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor.
+
+`xdg-terminal-exec`
+: Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.
+
+## Add a package
+
+Add a package to the repository by following these steps:
+
+1. Create `packages/PACKAGE_NAME/PKGBUILD`, replacing `PACKAGE_NAME` with the name of the package.
+2. Push the changes to `main`.
 3. The workflow detects the new package, builds it, signs it, and deploys it automatically.
 
-## Removing a package
+## Remove a package
 
-1. Delete `packages/<package-name>/PKGBUILD`.
-2. Push to `main`.
-3. The workflow prunes the package's binaries and database entry from the published repository on the next run.
+Remove a package by following these steps:
+
+1. Delete `packages/PACKAGE_NAME/PKGBUILD`.
+2. Push the changes to `main`.
+3. The workflow removes the package's binaries and database entry from the published repository on the next run.
 
 ## How it works
 
-1. **`changed-packages`:** Determines which packages need rebuilding based on the trigger type and changed files.
-2. **`build`:** Builds each package in an Arch Linux container, signs it with GPG.
-3. **`repo`:** Collects all built packages, fetches the currently published ones, prunes packages removed from the source tree, and generates a signed `repo-add` database.
-4. **`deploy`:** Publishes the repository to GitHub Pages.
+A GitHub Actions workflow with the following jobs builds and publishes the repository:
+
+`changed-packages`
+: Determines which packages need rebuilding based on the trigger type and changed files.
+
+`build`
+: Builds each package in an Arch Linux container and signs it with GPG.
+
+`repo`
+: Collects the built packages, fetches the ones already published, prunes packages removed from the source tree, and generates a signed `repo-add` database.
+
+`deploy`
+: Publishes the repository to GitHub Pages.
 
 Scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages.
 
