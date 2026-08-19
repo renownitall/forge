@@ -1,8 +1,8 @@
 # Forge
 
-Hi.
+Hi. This is a custom Arch Linux package repository. All packages are compiled with `x86-64-v3` optimizations and signed with GNU Privacy Guard (GPG).
 
-This is a custom Arch Linux package repository. All packages are compiled with `x86-64-v3` optimizations and signed with GNU Privacy Guard (GPG). A GitHub Actions workflow builds, signs, and publishes the packages, and GitHub Pages hosts the published repository. If you run Arch Linux, you can install these packages with `pacman`.
+A GitHub Actions workflow builds, signs, and publishes the packages, and GitHub Pages hosts the published repository. If you run Arch Linux, you can install these packages with `pacman`.
 
 > [!CAUTION]
 > The packages in this repository need an `x86-64-v3` capable CPU. They might not run on older generic `x86_64` machines.
