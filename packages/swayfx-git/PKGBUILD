@@ -50,11 +50,11 @@ build() {
   # Build scenefx from source (not packaged in official Arch repos).
   mkdir -p subprojects
   git clone --depth=1 https://github.com/wlrfx/scenefx.git subprojects/scenefx
-  meson setup build-scenefx subprojects/scenefx --prefix=/usr
+  meson setup build-scenefx subprojects/scenefx --prefix=/usr -Ddefault_library=static
   ninja -C build-scenefx
   DESTDIR="$PWD/install-scenefx" ninja -C build-scenefx install
-  # Remove scenefx source so meson's subproject() call doesn't pick it up
-  # and pass swayfx-specific options to it.
+  # Remove scenefx source so meson's subproject() fallback doesn't activate
+  # during the swayfx build (it would pass unsupported options to scenefx).
   rm -rf subprojects build-scenefx
 
   # Build swayfx, finding scenefx via PKG_CONFIG_PATH and include paths.
