@@ -48,7 +48,7 @@ The following packages are available:
 | `ttf-googlesans-code-nerd` | Google Sans Code patched with Nerd Font icons.                                                                  |
 | `ttf-noto-sans-mono-nerd`  | Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TrueType variants.       |
 | `wayfreeze-git`            | Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor. |
-| `xdg-terminal-exec`        | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.          |
+| `xdg-terminal-exec-git`    | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.          |
 
 ## Add a package
 

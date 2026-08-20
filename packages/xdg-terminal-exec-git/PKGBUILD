@@ -1,0 +1,35 @@
+# Maintainer: Max Gautier <mg@max.gautier.name>
+_pkgname=xdg-terminal-exec
+pkgname=${_pkgname}-git
+pkgver=0.14.3.r0.g065925d
+pkgrel=1
+pkgdesc="Proposed standard to launching desktop apps with Terminal=true (git)"
+arch=(any)
+url="https://gitlab.freedesktop.org/Vladimir-csp/$_pkgname"
+makedepends=('scdoc' 'git')
+checkdepends=('bats')
+license=('GPL-3.0-or-later')
+provides=("$_pkgname=${pkgver%%.r*}")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+https://github.com/Vladimir-csp/$_pkgname.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$_pkgname"
+  git describe --long --tags --abbrev=7 2>/dev/null |
+    sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+check() {
+  cd "$_pkgname"
+  bats "test/"
+}
+
+build() {
+  make -C "$_pkgname"
+}
+
+package() {
+  make -C "$_pkgname" prefix="$pkgdir/usr" install
+}
