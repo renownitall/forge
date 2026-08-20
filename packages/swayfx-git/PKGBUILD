@@ -35,7 +35,7 @@ makedepends=(
   'wlroots0.20'
   'xorg-xwayland'
 )
-options=(!debug !lto)
+options=(!debug)
 source=("$_pkgname::git+$url.git")
 sha256sums=('SKIP')
 
