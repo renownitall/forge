@@ -44,6 +44,7 @@ The following packages are available:
 | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `lutgen-cli-git`           | Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.                  |
 | `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones.                                       |
+| `swayfx-git`               | SwayFX compositor with shadows, blur, and rounded corners, built against wlroots 0.20.                          |
 | `ttf-googlesans-code`      | Google Sans Code, Google's monospace coding font.                                                               |
 | `ttf-googlesans-code-nerd` | Google Sans Code patched with Nerd Font icons.                                                                  |
 | `ttf-noto-sans-mono-nerd`  | Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TrueType variants.       |
