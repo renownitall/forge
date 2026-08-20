@@ -1,0 +1,71 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+_pkgname=swayfx
+pkgname=$_pkgname-git
+pkgver=r7069.03a0796
+pkgrel=1
+pkgdesc="SwayFX: Sway, but with eye candy! (git, wlroots 0.20)"
+arch=('x86_64')
+url="https://github.com/wlrfx/swayfx"
+license=('MIT')
+provides=('sway' "$_pkgname" 'wayland-compositor')
+conflicts=('sway' "$_pkgname")
+depends=(
+  'cairo'
+  'gdk-pixbuf2'
+  'libevdev.so=2-64'
+  'libinput'
+  'libjson-c.so=5-64'
+  'libpixman-1.so=0-64'
+  'libudev.so=1-64'
+  'libwayland-server.so=0-64'
+  'libxcb'
+  'libxkbcommon.so=0-64'
+  'pango'
+  'pcre2'
+  'wlroots0.20'
+  'xcb-util-wm'
+)
+makedepends=(
+  'git'
+  'libdrm'
+  'meson'
+  'ninja'
+  'scdoc'
+  'wayland-protocols'
+  'wlroots0.20'
+  'xorg-xwayland'
+)
+options=(!debug)
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$_pkgname"
+
+  # Build scenefx from source (not packaged in official Arch repos).
+  mkdir -p subprojects
+  git clone --depth=1 https://github.com/wlrfx/scenefx.git subprojects/scenefx
+  meson setup build-scenefx subprojects/scenefx --prefix=/usr
+  ninja -C build-scenefx
+  DESTDIR="$PWD/install-scenefx" ninja -C build-scenefx install
+
+  # Build swayfx, finding scenefx via PKG_CONFIG_PATH.
+  export PKG_CONFIG_PATH="$PWD/install-scenefx/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
+  export LD_LIBRARY_PATH="$PWD/install-scenefx/usr/lib:$LD_LIBRARY_PATH"
+  meson setup build --prefix=/usr -Dxwayland=enabled -Dman-pages=enabled -Dswaybar=true -Dswaynag=true
+  ninja -C build
+}
+
+package() {
+  cd "$_pkgname"
+  # Install scenefx shared library (built from source above).
+  DESTDIR="$pkgdir" ninja -C build-scenefx install
+  # Install swayfx.
+  DESTDIR="$pkgdir" ninja -C build install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
