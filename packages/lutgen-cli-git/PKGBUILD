@@ -13,7 +13,7 @@ depends=('gcc-libs' 'glibc')
 makedepends=('cargo' 'git')
 provides=("lutgen=${pkgver%%.r*}" "lutgen-cli=${pkgver%%.r*}")
 conflicts=('lutgen' 'lutgen-cli' 'lutgen-bin' 'lutgen-git')
-options=('!lto')
+options=()
 source=("$pkgname::git+https://github.com/ozwaldorf/lutgen-rs.git")
 sha256sums=('SKIP')
 

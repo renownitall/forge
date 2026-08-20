@@ -171,15 +171,19 @@ jobs:
           retry pacman -Syu --noconfirm --noprogressbar
           retry pacman -S --noconfirm --needed --noprogressbar git mold pacman-contrib
 
-          sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3/g' /etc/makepkg.conf
-          sed -i 's/!lto/lto/' /etc/makepkg.conf
-          sed -i 's/ debug / !debug /' /etc/makepkg.conf
+          sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3/g' /etc/makepkg.conf
+          sed -i '/^OPTIONS=/s/!lto/lto/' /etc/makepkg.conf
+          sed -i '/^OPTIONS=/s/ debug / !debug /' /etc/makepkg.conf
+          sed -i 's/-mno-omit-leaf-frame-pointer"/-mno-omit-leaf-frame-pointer -mpclmul"/' /etc/makepkg.conf
+          sed -i 's/LTOFLAGS="-flto=auto"/LTOFLAGS="-flto=auto -falign-functions=32"/' /etc/makepkg.conf
+          sed -i 's/-Wl,-z,pack-relative-relocs"/-Wl,-z,pack-relative-relocs -fuse-ld=mold"/' /etc/makepkg.conf
 
           NPROC=$(nproc)
           sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j${NPROC}\"/" /etc/makepkg.conf
 
           cat >> /etc/makepkg.conf <<'EOF'
-          RUSTFLAGS="-C target-cpu=x86-64-v3 -C opt-level=3 -C link-arg=-fuse-ld=mold"
+          RUSTFLAGS="-Cforce-frame-pointers=yes -Copt-level=3 -Ctarget-cpu=x86-64-v3 -Clink-arg=-z -Clink-arg=pack-relative-relocs -Ccodegen-units=1 -Clink-arg=-fuse-ld=mold"
+          export CARGO_PROFILE_RELEASE_LTO=fat
           EOF
 
           sed -i "s/COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q --threads=0 -19 -)/" /etc/makepkg.conf
