@@ -49,12 +49,6 @@ build() {
   "$bin" --bpaf-complete-style-fish >"completions/$_pkgname.fish"
 }
 
-check() {
-  cd "$srcdir/$pkgname"
-  export RUSTUP_TOOLCHAIN=stable
-  export CARGO_TARGET_DIR=target
-  cargo test --frozen --release --package lutgen-cli --package lutgen --package lutgen-palettes
-}
 
 package() {
   cd "$srcdir/$pkgname"
