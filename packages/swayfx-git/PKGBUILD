@@ -54,12 +54,14 @@ build() {
   ninja -C build-scenefx
   DESTDIR="$PWD/install-scenefx" ninja -C build-scenefx install
   # Remove scenefx source so meson's subproject() call doesn't pick it up
-  # and pass swayfx-specific options (-Dxwayland) to it.
+  # and pass swayfx-specific options to it.
   rm -rf subprojects build-scenefx
 
-  # Build swayfx, finding scenefx via PKG_CONFIG_PATH.
+  # Build swayfx, finding scenefx via PKG_CONFIG_PATH and include paths.
   export PKG_CONFIG_PATH="$PWD/install-scenefx/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
-  meson setup build --prefix=/usr -Dxwayland=enabled -Dman-pages=enabled -Dswaybar=true -Dswaynag=true
+  export CPATH="$PWD/install-scenefx/usr/include/scenefx-0.5:$CPATH"
+  export LIBRARY_PATH="$PWD/install-scenefx/usr/lib:$LIBRARY_PATH"
+  meson setup build --prefix=/usr --wrap-mode=nofallback -Dman-pages=enabled -Dswaybar=true -Dswaynag=true
   ninja -C build
 }
 

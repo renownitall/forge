@@ -62,7 +62,7 @@ jobs:
 
             # Empty commit with ci(rebuild): <pkg> triggers a single-package rebuild.
             if [ -z "$PACKAGES" ]; then
-              MSG=$(git log -1 --format=%s ${{ github.event.after }})
+              MSG=$(git log -1 --format=%s ${{ github.sha }})
               if [[ "$MSG" =~ ^ci\(rebuild\):[[:space:]]+(.+)$ ]]; then
                 TARGET="${BASH_REMATCH[1]}"
                 if echo "$ALL_PACKAGES" | grep -qx "$TARGET"; then
