@@ -3,20 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Forge, my Arch Linux package repository: browse available packages, set up the repo, and install with pacman" />
+    <meta
+      name="description"
+      content="Forge, my Arch Linux package repository: browse available packages, set up the repo, and install with pacman"
+    />
     <title>forge</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <script>
       (() => {
-        const saved = localStorage.getItem('forge-theme')
-        const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
-        document.documentElement.dataset.theme = saved || (dark ? 'dark' : 'light')
-        document.documentElement.classList.add('js')
-      })()
+        const saved = localStorage.getItem("forge-theme");
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme =
+          saved || (dark ? "dark" : "light");
+        document.documentElement.classList.add("js");
+      })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Noto+Sans+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Noto+Sans+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -26,12 +33,63 @@
           <h1>Forge</h1>
           <p class="tagline">My Arch Linux package repository</p>
         </div>
-        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme" title="Toggle theme">
-        <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <button
+          class="theme-toggle"
+          id="theme-toggle"
+          type="button"
+          aria-label="Toggle theme"
+          title="Toggle theme"
+        >
+          <svg
+            id="icon-sun"
+            xmlns="http://www.w3.org/2000/svg"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            hidden
+          >
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" />
+            <path d="M12 20v2" />
+            <path d="m4.93 4.93 1.41 1.41" />
+            <path d="m17.66 17.66 1.41 1.41" />
+            <path d="M2 12h2" />
+            <path d="M20 12h2" />
+            <path d="m6.34 17.66-1.41 1.41" />
+            <path d="m19.07 4.93-1.41 1.41" />
+          </svg>
+          <svg
+            id="icon-moon"
+            xmlns="http://www.w3.org/2000/svg"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+          </svg>
         </button>
       </div>
-      <p class="meta"><strong>Some packages require an <a href="https://github.com/HenrikBengtsson/x86-64-level#background">x86-64-v3</a> CPU.</strong></p>
+      <p class="meta">
+        <strong
+          >Some packages require an
+          <a href="https://github.com/HenrikBengtsson/x86-64-level#background"
+            >x86-64-v3</a
+          >
+          CPU.</strong
+        >
+      </p>
     </header>
 
     <main>
@@ -40,20 +98,52 @@
         <ol>
           <li>
             <p class="step-text">Import and trust the signing key:</p>
-            <pre><code>curl -fsSL https://renownitall.github.io/forge/signing_key.asc -o /tmp/forge-signing-key.asc
+            <div class="code-block">
+              <pre><code>curl -fsSL https://renownitall.github.io/forge/signing_key.asc -o /tmp/forge-signing-key.asc
 sudo pacman-key --add /tmp/forge-signing-key.asc
-sudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5</code><button class="copy" type="button" data-copy="key" aria-label="Copy key setup commands">Copy</button></pre>
+sudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5</code></pre>
+              <button
+                class="copy"
+                type="button"
+                data-copy="key"
+                aria-label="Copy key setup commands"
+              >
+                Copy
+              </button>
+            </div>
           </li>
           <li>
-            <p class="step-text">Add the following block to your <code>/etc/pacman.conf</code>:</p>
-            <pre><code>[forge]
+            <p class="step-text">
+              Add the following block to your <code>/etc/pacman.conf</code>:
+            </p>
+            <div class="code-block">
+              <pre><code>[forge]
 SigLevel = Required DatabaseOptional
-Server = https://renownitall.github.io/forge</code><button class="copy" type="button" data-copy="conf" aria-label="Copy pacman.conf block">Copy</button></pre>
+Server = https://renownitall.github.io/forge</code></pre>
+              <button
+                class="copy"
+                type="button"
+                data-copy="conf"
+                aria-label="Copy pacman.conf block"
+              >
+                Copy
+              </button>
+            </div>
           </li>
           <li>
             <p class="step-text">Sync and install:</p>
-            <pre><code>sudo pacman -Syu
-sudo pacman -S PACKAGE_NAME</code><button class="copy" type="button" data-copy="install" aria-label="Copy sync and install commands">Copy</button></pre>
+            <div class="code-block">
+              <pre><code>sudo pacman -Syu
+sudo pacman -S PACKAGE_NAME</code></pre>
+              <button
+                class="copy"
+                type="button"
+                data-copy="install"
+                aria-label="Copy sync and install commands"
+              >
+                Copy
+              </button>
+            </div>
           </li>
         </ol>
       </section>
@@ -61,7 +151,12 @@ sudo pacman -S PACKAGE_NAME</code><button class="copy" type="button" data-copy="
       <section id="packages" aria-labelledby="packages-title">
         <h2 id="packages-title">Packages</h2>
         <div class="toolbar">
-          <input type="search" id="filter" placeholder="Filter packages" aria-label="Filter packages by name or description" />
+          <input
+            type="search"
+            id="filter"
+            placeholder="Filter packages"
+            aria-label="Filter packages by name or description"
+          />
           <span class="count" id="count" role="status"></span>
         </div>
         <div class="table-wrap">
@@ -82,15 +177,32 @@ sudo pacman -S PACKAGE_NAME</code><button class="copy" type="button" data-copy="
             </tbody>
           </table>
         </div>
-        <p class="state" id="error" hidden>Couldn't load the package list. Try refreshing, or <a href="https://github.com/renownitall/forge">view the source</a> on GitHub.</p>
-        <noscript><p class="state">The package list needs JavaScript. Alternatively, point pacman at the repo and run <code>pacman -Sl forge</code>.</p></noscript>
+        <p class="state" id="error" hidden>
+          Couldn't load the package list. Try refreshing, or
+          <a href="https://github.com/renownitall/forge">view the source</a> on
+          GitHub.
+        </p>
+        <noscript
+          ><p class="state">
+            The package list needs JavaScript. Alternatively, point pacman at
+            the repo and run <code>pacman -Sl forge</code>.
+          </p></noscript
+        >
         <span id="copy-status" class="sr-only" role="status"></span>
+      </section>
+
+      <section id="why" aria-labelledby="why-title">
+        <h2 id="why-title">Why did you make this website?</h2>
+        <p>Yes.</p>
       </section>
     </main>
 
     <footer>
       <p>Published with GitHub Pages</p>
-      <p><a href="https://github.com/renownitall/forge">View the source</a> on GitHub</p>
+      <p>
+        <a href="https://github.com/renownitall/forge">View the source</a> on
+        GitHub
+      </p>
     </footer>
 
     <script src="app.js"></script>

@@ -1,6 +1,6 @@
 :root {
-  --font-sans: 'Noto Sans', sans-serif;
-  --font-mono: 'Noto Sans Mono', ui-monospace, monospace;
+  --font-sans: "Noto Sans", sans-serif;
+  --font-mono: "Noto Sans Mono", ui-monospace, monospace;
   --focus-width: 2px;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -18,7 +18,7 @@
   --line: #d0d0d0;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --bg: #121212;
   --bg-alt: #1e1e1e;
   --text: #f5f5f5;
@@ -53,7 +53,9 @@ body {
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.65;
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 h1 {
@@ -179,6 +181,10 @@ code {
   font-family: var(--font-mono);
 }
 
+.code-block {
+  position: relative;
+}
+
 .copy {
   position: absolute;
   top: var(--space-2);
@@ -191,7 +197,9 @@ code {
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
 }
 
 .copy:hover {
@@ -213,7 +221,7 @@ code {
   font-size: 0.8125rem;
 }
 
-input[type='search'] {
+input[type="search"] {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -224,7 +232,7 @@ input[type='search'] {
   min-width: 16rem;
 }
 
-input[type='search']::placeholder {
+input[type="search"]::placeholder {
   color: var(--dim);
 }
 
