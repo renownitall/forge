@@ -24,6 +24,7 @@ runs:
 
         KEY_FILE=$(mktemp)
         PASS_FILE=$(mktemp)
+        trap 'rm -f "$KEY_FILE" "$PASS_FILE"' EXIT
         echo "$GPG_PRIVATE_KEY" > "$KEY_FILE"
         echo "$GPG_PASSPHRASE" > "$PASS_FILE"
         chmod 600 "$KEY_FILE" "$PASS_FILE"
@@ -67,3 +68,4 @@ runs:
         fi
 
         rm -f "$KEY_FILE" "$PASS_FILE"
+        trap - EXIT

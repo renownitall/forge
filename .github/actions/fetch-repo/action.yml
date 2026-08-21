@@ -1,0 +1,67 @@
+name: "Fetch Existing Repo Packages"
+description: "Fetches existing repository packages from Pages, pruning removed/deduped entries"
+inputs:
+  pages-url:
+    description: "Pages URL"
+    required: true
+  repo-name:
+    description: "Repository name"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Fetch repo packages
+      shell: bash
+      env:
+        PAGES_URL: ${{ inputs.pages-url }}
+        REPO_NAME: ${{ inputs.repo-name }}
+      run: |
+        set -euo pipefail
+        mkdir -p repo
+        cp signing_key.asc repo/ || true
+        ALL_PACKAGES=$(ls -d packages/*/PKGBUILD 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} || echo "")
+        debug_opted_in() {
+          opts=$(tr -d '\n' < "packages/$1/PKGBUILD" | grep -oE 'options\+?=\([^)]*\)' | sed -E 's/^options\+?=//' | tr -d "()'\"" | tr -s ' ')
+          echo "$opts" | tr ' ' '\n' | grep -qx 'debug'
+        }
+        echo "Fetching existing repo file index from ${PAGES_URL}..."
+        HTTP_CODE=$(curl -sSL --connect-timeout 15 --max-time 60 -o /tmp/files.tar.gz -w '%{http_code}' "${PAGES_URL}/${REPO_NAME}.files.tar.gz")
+        : > /tmp/published.tsv
+        if [ "$HTTP_CODE" = "200" ]; then
+          tar -xzOzf /tmp/files.tar.gz --wildcards '*/desc' | awk '
+              /^%FILENAME%$/ {
+                if (name != "" && base != "" && fn != "") print name "\t" base "\t" fn
+                name=""; base=""; fn=""; getline; fn=$0; next
+              }
+              /^%NAME%$/     { getline; name=$0; next }
+              /^%BASE%$/     { getline; base=$0; next }
+              END            { if (name != "" && base != "" && fn != "") print name "\t" base "\t" fn }
+            ' | sort -u > /tmp/published.tsv
+        elif [ "$HTTP_CODE" = "404" ]; then
+          echo "  No existing repo found at ${PAGES_URL} (first deploy?)."
+        else
+          echo "::error::Failed to fetch existing repo index (HTTP ${HTTP_CODE}); aborting to avoid wiping published packages"
+          exit 1
+        fi
+        if [ -s /tmp/published.tsv ]; then
+          while IFS=$'\t' read -r name base fn; do
+            keep=1; reason=""
+            if ! echo "$ALL_PACKAGES" | grep -qx "$base"; then
+              keep=0; reason="base '${base}' no longer in packages/"
+            elif [ -d "artifacts/$base" ]; then
+              keep=0; reason="rebuilt this run, dropping previously published '${name}'"
+            elif [ "$name" = "${base}-debug" ]; then
+              if ! debug_opted_in "$base"; then
+                keep=0; reason="debug disabled globally, '${base}' does not opt in"
+              fi
+            fi
+            if [ "$keep" != "1" ]; then
+              echo "  Prune     $fn  ($reason)"
+              continue
+            fi
+            [ -f "repo/$fn" ] && continue
+            echo "  Fetching $fn..."
+            curl -fsSL --connect-timeout 15 --max-time 120 "${PAGES_URL}/${fn}" -o "repo/$fn" || echo "    WARN: $fn missing on Pages, will be dropped from DB"
+            curl -fsSL --connect-timeout 15 --max-time 30 "${PAGES_URL}/${fn}.sig" -o "repo/$fn.sig" || echo "    WARN: $fn.sig missing on Pages"
+          done < /tmp/published.tsv
+        fi
