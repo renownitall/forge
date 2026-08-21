@@ -271,6 +271,10 @@ input[type="search"]::-webkit-search-decoration {
   display: block;
 }
 
+.filter-clear[hidden] {
+  display: none;
+}
+
 input[type="search"]::placeholder {
   color: var(--dim);
 }
