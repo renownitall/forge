@@ -57,6 +57,7 @@ const rowsEl = document.getElementById("rows");
 const countEl = document.getElementById("count");
 const errorEl = document.getElementById("error");
 const filterEl = document.getElementById("filter");
+const filterClear = document.getElementById("filter-clear");
 
 let packages = [];
 
@@ -84,6 +85,7 @@ const render = (list) => {
 };
 
 filterEl.addEventListener("input", () => {
+  filterClear.hidden = !filterEl.value;
   const q = filterEl.value.trim().toLowerCase();
   render(
     q
@@ -92,6 +94,12 @@ filterEl.addEventListener("input", () => {
         )
       : packages,
   );
+});
+
+filterClear.addEventListener("click", () => {
+  filterEl.value = "";
+  filterEl.dispatchEvent(new Event("input"));
+  filterEl.focus();
 });
 
 const themeRoot = document.documentElement;
