@@ -1,1 +1,6 @@
 style-guide.md
+node_modules/
+dist/
+.cache/
+*.log
+.DS_Store
