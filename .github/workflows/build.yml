@@ -430,6 +430,9 @@ jobs:
 
   deploy:
     needs: repo
+    # Default gating requires all transitive needs to succeed, so a skipped
+    # build (no package changes) would skip the deploy of a site-only edit.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
