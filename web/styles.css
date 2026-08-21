@@ -47,7 +47,7 @@
 body {
   margin: 0 auto;
   max-width: 62rem;
-  padding: var(--space-6) var(--space-5) var(--space-7);
+  padding: var(--space-6) var(--space-6) var(--space-7);
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
@@ -373,7 +373,7 @@ footer p + p {
 
 @media (max-width: 34rem) {
   body {
-    padding: var(--space-5);
+    padding: var(--space-6);
   }
 }
 
