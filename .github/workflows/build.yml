@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "packages/**"
+      - "web/**"
       - ".github/workflows/build.yml"
       - ".github/actions/**"
   workflow_dispatch:
@@ -116,12 +117,14 @@ jobs:
 
       - name: Check if package needs Rust
         id: check-rust
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
           # Enabling the cache is a pure optimization, so the match is
           # intentionally broad: word-level search over the whole PKGBUILD,
           # which also covers multi-line array entries (e.g. makedepends with
           # one 'cargo'/'rust' per line) that line-anchored regexes miss.
-          if grep -qE '\b(cargo|rustc|rustup|rust)\b' "packages/${{ matrix.package }}/PKGBUILD"; then
+          if grep -qE '\b(cargo|rustc|rustup|rust)\b' "packages/$PACKAGE/PKGBUILD"; then
             echo "needs_rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "needs_rust=false" >> "$GITHUB_OUTPUT"
@@ -195,19 +198,25 @@ jobs:
           user: builder
 
       - name: Build ${{ matrix.package }}
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
-          cd "$GITHUB_WORKSPACE/packages/${{ matrix.package }}"
+          cd "$GITHUB_WORKSPACE/packages/$PACKAGE"
           su builder -c "makepkg -s --sign --noconfirm --noprogressbar --cleanbuild"
 
       - name: Verify package was built
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
-          ls packages/${{ matrix.package }}/*.pkg.tar.zst
-          ls packages/${{ matrix.package }}/*.pkg.tar.zst.sig
+          ls packages/$PACKAGE/*.pkg.tar.zst
+          ls packages/$PACKAGE/*.pkg.tar.zst.sig
 
       - name: Stage packages for artifact upload
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
           stage="$GITHUB_WORKSPACE/artifact-stage"
-          src="$GITHUB_WORKSPACE/packages/${{ matrix.package }}"
+          src="$GITHUB_WORKSPACE/packages/$PACKAGE"
           mkdir -p "$stage"
           shopt -s nullglob
           files=( "$src"/*.pkg.tar.zst "$src"/*.pkg.tar.zst.sig )
@@ -217,11 +226,6 @@ jobs:
           fi
           tar -C "$src" -cf "$stage/pkg.tar" -- "${files[@]##*/}"
           tar -tf "$stage/pkg.tar"
-          if find "$stage" -name '*:*' | grep -q .; then
-            echo "::error::Staged artifact path still contains a colon"
-            find "$stage" -print
-            exit 1
-          fi
 
       - name: Upload package artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -269,8 +273,8 @@ jobs:
 
           pacman-key --init
           pacman-key --populate archlinux
-          # devtools provides repo-add; pacman-contrib provides paccache
-          retry pacman -Syu --noconfirm --noprogressbar devtools pacman-contrib
+          # repo-add ships with pacman; jq formats the package manifest.
+          retry pacman -Syu --noconfirm --noprogressbar jq
 
       - name: Setup GPG
         uses: ./.github/actions/setup-gpg
@@ -288,7 +292,7 @@ jobs:
       - name: Fetch existing repository packages
         run: |
           mkdir -p repo
-          cp signing_key.asc repo/ 2>/dev/null || true
+          cp signing_key.asc repo/
 
           ALL_PACKAGES=$(ls -d packages/*/PKGBUILD 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} || echo "")
 
@@ -381,6 +385,45 @@ jobs:
 
           echo "Repository contents:"
           ls -lah
+
+      - name: Generate package manifest and stage site
+        env:
+          SHORT_SHA: ${{ github.sha }}
+        run: |
+          cd repo
+
+          tar -xzOzf "${REPO_NAME}.db.tar.gz" --wildcards '*/desc' \
+            | awk '
+                function emit() {
+                  if (name != "") print name "\t" base "\t" ver "\t" desc "\t" csize "\t" bdate
+                }
+                { sub(/\r$/, "") }
+                /^%NAME%$/      { getline; name=$0; next }
+                /^%BASE%$/      { getline; base=$0; next }
+                /^%VERSION%$/   { getline; ver=$0; next }
+                /^%DESC%$/      { getline; desc=$0; next }
+                /^%CSIZE%$/     { getline; csize=$0; next }
+                /^%BUILDDATE%$/ { getline; bdate=$0; next }
+                /^$/            { emit(); name=base=ver=desc=csize=bdate=""; next }
+                { next }
+                END { emit() }
+              ' \
+            | LC_ALL=C sort \
+            | jq -R 'split("\t") | {
+                name: .[0],
+                base: .[1],
+                version: .[2],
+                description: .[3],
+                size: (.[4] | tonumber),
+                built: (.[5] | tonumber)
+              }' \
+            | jq -s '{packages: .}' \
+            > packages.json
+
+          cp -R "$GITHUB_WORKSPACE/web/." .
+
+          short_sha="${SHORT_SHA:0:7}"
+          sed -i "s|styles.css|styles.css?v=${short_sha}|; s|app.js|app.js?v=${short_sha}|" index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
