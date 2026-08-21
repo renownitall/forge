@@ -234,8 +234,14 @@ input[type='search']::placeholder {
 
 table {
   width: 100%;
+  min-width: 48rem;
   border-collapse: collapse;
   font-size: 0.875rem;
+}
+
+/* Version strings like 0.0.0.r14.g5a4ff9c-1 must never wrap mid-token. */
+td:nth-child(2) {
+  white-space: nowrap;
 }
 
 th {
