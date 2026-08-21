@@ -36,20 +36,24 @@ makedepends=(
   'xorg-xwayland'
 )
 options=(!debug)
-source=("$_pkgname::git+$url.git")
-sha256sums=('SKIP')
+source=(
+  "$_pkgname::git+$url.git"
+  "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=26200c5d9fa947a1d3b0935d3f9237229cd3e5ba"
+)
+sha256sums=('SKIP'
+  'SKIP')
 
 pkgver() {
-  cd "$_pkgname"
-  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  cd "$srcdir/$_pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
 }
 
 build() {
-  cd "$_pkgname"
+  cd "$srcdir/$_pkgname"
 
   # Build scenefx from source (not packaged in official Arch repos).
   mkdir -p subprojects
-  git clone --depth=1 https://github.com/wlrfx/scenefx.git subprojects/scenefx
+  cp -a "$srcdir/scenefx" subprojects/scenefx
   meson setup build-scenefx subprojects/scenefx --prefix=/usr -Ddefault_library=static
   ninja -C build-scenefx
   DESTDIR="$PWD/install-scenefx" ninja -C build-scenefx install
@@ -66,7 +70,7 @@ build() {
 }
 
 package() {
-  cd "$_pkgname"
+  cd "$srcdir/$_pkgname"
   DESTDIR="$pkgdir" ninja -C build install
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

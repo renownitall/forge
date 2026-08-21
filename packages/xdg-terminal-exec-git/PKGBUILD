@@ -6,7 +6,7 @@ pkgver=0.14.3.r0.g065925d
 pkgrel=1
 pkgdesc="Open the user's preferred terminal emulator from apps and scripts (git)"
 arch=('any')
-url="https://gitlab.freedesktop.org/Vladimir-csp/$_pkgname"
+url="https://github.com/Vladimir-csp/$_pkgname"
 makedepends=('scdoc' 'git')
 checkdepends=('bats')
 license=('GPL-3.0-or-later')
@@ -23,14 +23,14 @@ pkgver() {
 }
 
 check() {
-  cd "$_pkgname"
+  cd "$srcdir/$_pkgname"
   bats "test/"
 }
 
 build() {
-  make -C "$_pkgname"
+  make -C "$srcdir/$_pkgname"
 }
 
 package() {
-  make -C "$_pkgname" prefix="$pkgdir/usr" install
+  make -C "$srcdir/$_pkgname" prefix="$pkgdir/usr" install
 }

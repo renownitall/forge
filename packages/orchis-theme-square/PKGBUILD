@@ -18,12 +18,12 @@ source=("${pkgname}::git+https://github.com/vinceliuice/Orchis-theme.git")
 sha256sums=('SKIP')
 
 pkgver() {
-  cd "${pkgname}"
+  cd "$srcdir/${pkgname}"
   git log -1 --format='%cd' --date=format:'%Y.%m.%d'
 }
 
 package() {
-  cd "${pkgname}"
+  cd "$srcdir/${pkgname}"
   ./install.sh \
     --dest "${pkgdir}/usr/share/themes" \
     --name Orchis \
