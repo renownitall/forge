@@ -429,7 +429,7 @@ jobs:
 
   deploy:
     needs: repo
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && !failure() && needs.repo.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write

@@ -125,7 +125,7 @@ jobs:
 
   deploy:
     needs: site
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && !failure() && needs.site.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
