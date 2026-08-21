@@ -1,0 +1,45 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+_pkgname=calpdf
+pkgname=${_pkgname}-git
+pkgver=0.0.0.r14.g5a4ff9c
+pkgrel=1
+pkgdesc="A simple PDF toolkit to run alongside Calibre (git)"
+arch=('any')
+url="https://github.com/renownitall/$_pkgname"
+license=('MIT')
+depends=(
+  'python'
+  'python-pikepdf'
+  'python-pillow'
+  'python-typer'
+  'python-requests'
+  'python-rich'
+)
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling' 'git')
+optdepends=(
+  'qpdf: required by the optimize command'
+  'ghostscript: required by the --strip-color-profiles option'
+)
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$_pkgname"
+  git describe --long --tags --abbrev=7 2>/dev/null |
+    sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "$srcdir/$_pkgname"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "$srcdir/$_pkgname"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}

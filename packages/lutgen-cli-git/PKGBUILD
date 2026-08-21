@@ -49,7 +49,6 @@ build() {
   "$bin" --bpaf-complete-style-fish >"completions/$_pkgname.fish"
 }
 
-
 package() {
   cd "$srcdir/$pkgname"
 

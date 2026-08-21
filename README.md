@@ -42,6 +42,7 @@ The following packages are available:
 
 | Package                    | Description                                                                                                     |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `calpdf-git`               | A PDF toolkit to run alongside Calibre that swaps covers, downloads covers, shrinks PDFs, and edits bookmarks.  |
 | `lutgen-cli-git`           | Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.                  |
 | `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones.                                       |
 | `swayfx-git`               | SwayFX compositor with shadows, blur, and rounded corners, built against wlroots 0.20.                          |
@@ -58,6 +59,8 @@ To add a package to the repository, follow these steps:
 1. Create `packages/PACKAGE_NAME/PKGBUILD`, replacing `PACKAGE_NAME` with the name of the package.
 2. Push the changes to `main`.
 3. The workflow detects the new package, builds it, signs it, and deploys it automatically.
+
+You don't need a `.SRCINFO` file. The workflow builds directly from the `PKGBUILD`.
 
 ## Remove a package
 
