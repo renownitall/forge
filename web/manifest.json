@@ -1,0 +1,16 @@
+{
+  "name": "Forge",
+  "short_name": "Forge",
+  "description": "renowned's Arch Linux package repository",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#121212",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

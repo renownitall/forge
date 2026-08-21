@@ -17,14 +17,21 @@
       name="description"
       content="Forge, renowned's Arch Linux package repository: browse available packages, set up the repo, and install with pacman"
     />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'"
+    />
     <title>forge</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="manifest" href="manifest.json" />
     <script>
       (() => {
         let saved = null;
         try {
           saved = localStorage.getItem("forge-theme");
-        } catch {}
+        } catch (err) {
+          console.warn("Failed to read forge-theme:", err);
+        }
         const stored = saved === "dark" || saved === "light" ? saved : null;
         const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.dataset.theme =
@@ -219,6 +226,14 @@ sudo pacman -S PACKAGE_NAME</code></pre>
       <section id="why" aria-labelledby="why-title">
         <h2 id="why-title">Why did you make this website?</h2>
         <p>Yes.</p>
+        <details class="why-details">
+          <summary>On a serious note,</summary>
+          <p>
+            these packages started as personal builds for my own machines.
+            Publishing them here makes them easy to browse and install directly
+            with <code>pacman</code> instead of building from source.
+          </p>
+        </details>
       </section>
     </main>
 

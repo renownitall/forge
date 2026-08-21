@@ -44,19 +44,25 @@ const esc = (s) =>
       ],
   );
 
-const fmtSize = (n) =>
-  n >= 1048576
+const fmtSize = (n) => {
+  if (!Number.isFinite(n) || n < 0) return "—";
+  return n >= 1048576
     ? `${(n / 1048576).toFixed(1)} MiB`
     : n >= 1024
       ? `${(n / 1024).toFixed(1)} KiB`
       : `${n} B`;
+};
 
-const fmtDate = (ts) =>
-  new Date(ts * 1000).toLocaleDateString("en-US", {
+const fmtDate = (ts) => {
+  if (!Number.isFinite(ts)) return "—";
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "2-digit",
   });
+};
 
 const rowsEl = document.getElementById("rows");
 const countEl = document.getElementById("count");
@@ -77,11 +83,11 @@ const render = (list) => {
     .map(
       (p) => `<tr>
               <td class="mono">
-                ${esc(p.name)}
-                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${encodeURIComponent(p.base)}/PKGBUILD">PKGBUILD</a></span>
+                ${esc(p.name ?? "—")}
+                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${encodeURIComponent(p.base ?? p.name ?? "")}/PKGBUILD">PKGBUILD</a></span>
               </td>
-              <td class="mono">${esc(p.version)}</td>
-              <td class="desc">${esc(p.description || "")}</td>
+              <td class="mono">${esc(p.version ?? "—")}</td>
+              <td class="desc">${esc(p.description ?? "")}</td>
               <td class="num">${fmtSize(p.size)}</td>
               <td class="num">${fmtDate(p.built)}</td>
             </tr>`,
@@ -90,7 +96,7 @@ const render = (list) => {
 };
 
 filterEl.addEventListener("input", () => {
-  filterClear.hidden = !filterEl.value;
+  filterClear.hidden = !filterEl.value.trim();
   const q = filterEl.value.trim().toLowerCase();
   render(
     q
@@ -134,6 +140,7 @@ fetch("packages.json", { cache: "no-store" })
     return res.json();
   })
   .then((data) => {
+    if (!data || !Array.isArray(data.packages)) throw new Error("invalid manifest");
     packages = data.packages;
     render(packages);
   })
