@@ -397,15 +397,13 @@ jobs:
                 function emit() {
                   if (name != "") print name "\t" base "\t" ver "\t" desc "\t" csize "\t" bdate
                 }
-                { sub(/\r$/, "") }
+                /^%FILENAME%$/  { emit(); next }
                 /^%NAME%$/      { getline; name=$0; next }
                 /^%BASE%$/      { getline; base=$0; next }
                 /^%VERSION%$/   { getline; ver=$0; next }
                 /^%DESC%$/      { getline; desc=$0; next }
                 /^%CSIZE%$/     { getline; csize=$0; next }
                 /^%BUILDDATE%$/ { getline; bdate=$0; next }
-                /^$/            { emit(); name=base=ver=desc=csize=bdate=""; next }
-                { next }
                 END { emit() }
               ' \
             | LC_ALL=C sort \
