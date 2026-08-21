@@ -422,6 +422,7 @@ jobs:
 
           short_sha="${SHORT_SHA:0:7}"
           sed -i "s|styles.css|styles.css?v=${short_sha}|; s|app.js|app.js?v=${short_sha}|" index.html
+          sed -i "s|packages.json|packages.json?v=${short_sha}|" app.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

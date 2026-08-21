@@ -18,14 +18,19 @@ document.querySelectorAll(".copy").forEach((btn) => {
       copyStatus.textContent =
         "Copy failed. The commands are selected instead.";
       const code = btn.parentElement.querySelector("code");
-      const range = document.createRange();
-      range.selectNodeContents(code);
-      const selection = getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
+      if (code) {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
     }
     setTimeout(() => {
       btn.textContent = original;
+      copyStatus.textContent = "";
     }, 1200);
   });
 });
@@ -73,7 +78,7 @@ const render = (list) => {
       (p) => `<tr>
               <td class="mono">
                 ${esc(p.name)}
-                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${esc(p.base)}/PKGBUILD">PKGBUILD</a></span>
+                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${encodeURIComponent(p.base)}/PKGBUILD">PKGBUILD</a></span>
               </td>
               <td class="mono">${esc(p.version)}</td>
               <td class="desc">${esc(p.description || "")}</td>
@@ -115,13 +120,15 @@ const syncThemeIcon = () => {
 themeBtn.addEventListener("click", () => {
   const next = themeRoot.dataset.theme === "dark" ? "light" : "dark";
   themeRoot.dataset.theme = next;
-  localStorage.setItem("forge-theme", next);
+  try {
+    localStorage.setItem("forge-theme", next);
+  } catch {}
   syncThemeIcon();
 });
 
 syncThemeIcon();
 
-fetch("packages.json")
+fetch("packages.json", { cache: "no-store" })
   .then((res) => {
     if (!res.ok) throw new Error(res.status);
     return res.json();
@@ -132,5 +139,6 @@ fetch("packages.json")
   })
   .catch(() => {
     rowsEl.innerHTML = "";
+    countEl.textContent = "";
     errorEl.hidden = false;
   });
