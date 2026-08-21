@@ -2,7 +2,7 @@
 pkgname=orchis-theme-square
 pkgver=2026.08.10
 pkgrel=1
-pkgdesc="Orchis GTK theme, built with square (0px) corners"
+pkgdesc="Orchis GTK theme built with fully square corners"
 arch=('any')
 url="https://github.com/vinceliuice/Orchis-theme"
 license=('GPL-3.0-or-later')

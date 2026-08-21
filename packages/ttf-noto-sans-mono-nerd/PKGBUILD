@@ -2,7 +2,7 @@
 pkgname=ttf-noto-sans-mono-nerd
 pkgver=3.5.0
 pkgrel=1
-pkgdesc="Noto Sans Mono font patched with Nerd Fonts (all weights, NF/Mono/Propo static TTF)"
+pkgdesc="Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo variants"
 arch=('any')
 url="https://github.com/ryanoasis/nerd-fonts"
 license=('OFL-1.1')

@@ -2,7 +2,7 @@
 pkgname=ttf-googlesans-code
 pkgver=7.001
 pkgrel=1
-pkgdesc="Official Google Sans Code monospace font family (variable TTF)"
+pkgdesc="Google Sans Code, Google's monospace coding font (variable TTF)"
 arch=('any')
 url="https://github.com/googlefonts/googlesans-code"
 license=('OFL-1.1')

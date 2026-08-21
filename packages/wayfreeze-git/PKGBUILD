@@ -1,15 +1,16 @@
-# Maintainer: OGIOS <ogios@foxmail.com>
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+# Contributor: OGIOS <ogios@foxmail.com>
 _pkgname=wayfreeze
 pkgname=wayfreeze-git
 pkgver=r81.8f813ab
 pkgrel=1
-pkgdesc="Tool to freeze the screen of a Wayland compositor "
+pkgdesc="Freeze the screen to draw a selection and take a screenshot without movement underneath (git)"
 arch=('x86_64')
 url="https://github.com/Jappie3/wayfreeze"
 license=('AGPL-3.0-only')
-provides=(wayfreeze)
+provides=('wayfreeze')
 depends=('wayland' 'libxkbcommon')
-makedepends=(rust git)
+makedepends=('rust' 'git')
 options=(!debug)
 source=("git+$url.git")
 sha256sums=('SKIP')

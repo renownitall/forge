@@ -1,10 +1,11 @@
-# Maintainer: Max Gautier <mg@max.gautier.name>
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+# Contributor: Max Gautier <mg@max.gautier.name>
 _pkgname=xdg-terminal-exec
 pkgname=${_pkgname}-git
 pkgver=0.14.3.r0.g065925d
 pkgrel=1
-pkgdesc="Proposed standard to launching desktop apps with Terminal=true (git)"
-arch=(any)
+pkgdesc="Open the user's preferred terminal emulator from apps and scripts (git)"
+arch=('any')
 url="https://gitlab.freedesktop.org/Vladimir-csp/$_pkgname"
 makedepends=('scdoc' 'git')
 checkdepends=('bats')
