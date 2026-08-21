@@ -17,8 +17,8 @@ depends=(
 )
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling' 'git')
 optdepends=(
-  'qpdf: required by the optimize command'
-  'ghostscript: required by the --strip-color-profiles option'
+  'qpdf: optimize command'
+  'ghostscript: --strip-color-profiles option'
 )
 provides=("$_pkgname")
 conflicts=("$_pkgname")
@@ -27,9 +27,12 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "$srcdir/$_pkgname"
-  git describe --long --tags --abbrev=7 2>/dev/null |
-    sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+  local desc
+  if desc="$(git describe --long --tags --abbrev=7 2>/dev/null)"; then
+    printf '%s\n' "$desc" | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+  else
     printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
 }
 
 build() {
