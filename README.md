@@ -2,7 +2,7 @@
 
 Hi. This is my custom Arch Linux package repository. Packages are compiled with `x86-64-v3` and other optimizations where they contain native code, and signed with _GNU Privacy Guard (GPG)_.
 
-A GitHub Actions workflow builds, signs, and publishes the packages, and GitHub Pages hosts the published repository. If you run Arch Linux, you can install these packages with `pacman`.
+The packages are built, signed, and published automatically. They're hosted on GitHub Pages, and scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages. If you run Arch Linux, you can install these packages with `pacman`.
 
 > [!CAUTION]
 > The packages compiled from C or Rust are built with `x86-64-v3` and need a compatible CPU. They might not run on older generic `x86_64` machines.
@@ -51,37 +51,6 @@ The following packages are available:
 | `ttf-noto-sans-mono-nerd`  | Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TrueType variants.       |
 | `wayfreeze-git`            | Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor. |
 | `xdg-terminal-exec-git`    | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.          |
-
-## Add a package
-
-To add a package to the repository, follow these steps:
-
-1. Create `packages/PACKAGE_NAME/PKGBUILD`, replacing `PACKAGE_NAME` with the name of the package.
-2. Push the changes to `main`.
-3. The workflow detects the new package, builds it, signs it, and deploys it automatically.
-
-You don't need a `.SRCINFO` file. The workflow builds directly from the `PKGBUILD`.
-
-## Remove a package
-
-To remove a package, follow these steps:
-
-1. Delete `packages/PACKAGE_NAME/PKGBUILD`.
-2. Push the changes to `main`.
-3. The workflow removes the package's binaries and database entry from the published repository on the next run.
-
-## How it works
-
-A GitHub Actions workflow with the following jobs builds and publishes the repository:
-
-| Job                | Purpose                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `changed-packages` | Determines which packages need rebuilding based on the trigger type and changed files.                                                                       |
-| `build`            | Builds each package in an Arch Linux container and signs it with GPG.                                                                                        |
-| `repo`             | Collects the built packages and fetches the ones already published. Prunes packages removed from the source tree and generates a signed `repo-add` database. |
-| `deploy`           | Publishes the repository to GitHub Pages.                                                                                                                    |
-
-Scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages.
 
 ---
 
