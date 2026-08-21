@@ -1,6 +1,6 @@
 # Forge
 
-Hi. This is my custom Arch Linux package repository. Packages are compiled with `x86-64-v3` and other optimizations where they contain native code, and signed with _GNU Privacy Guard (GPG)_.
+Hi. This is my custom Arch Linux package repository. Packages are signed with GNU Privacy Guard (GPG).
 
 The packages are built, signed, and published automatically. They're hosted on GitHub Pages, and scheduled builds run daily at 04:37 UTC to pick up upstream changes for `-git` packages. If you run Arch Linux, you can install these packages with `pacman`.
 
