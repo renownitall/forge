@@ -7,50 +7,7 @@ The packages are built, signed, and published automatically. They're hosted on G
 > [!CAUTION]
 > The packages compiled from C or Rust are built with `x86-64-v3` and need a compatible CPU. They might not run on older generic `x86_64` machines.
 
-## Set up the repository
-
-To set up the repository, follow these steps:
-
-1. Import and trust the signing key by running the following commands:
-
-   ```bash
-   curl -fsSL https://renownitall.github.io/forge/signing_key.asc -o /tmp/forge-signing-key.asc
-   sudo pacman-key --add /tmp/forge-signing-key.asc
-   sudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5
-   ```
-
-2. Add the following block to `/etc/pacman.conf`:
-
-   ```ini
-   [forge]
-   SigLevel = Required DatabaseOptional
-   Server = https://renownitall.github.io/forge
-   ```
-
-3. Sync your system and install a package by running the following commands:
-
-   ```bash
-   sudo pacman -Syu
-   sudo pacman -S PACKAGE_NAME
-   ```
-
-   Replace `PACKAGE_NAME` with the name of the package you want to install, for example `lutgen-cli-git`.
-
-## Available packages
-
-The following packages are available:
-
-| Package                    | Description                                                                                                     |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `calpdf-git`               | A PDF toolkit to run alongside Calibre that swaps covers, downloads covers, shrinks PDFs, and edits bookmarks.  |
-| `lutgen-cli-git`           | Recolors images, like wallpapers, to match a color theme such as Catppuccin, Gruvbox, or Nord.                  |
-| `orchis-theme-square`      | Orchis GTK theme built with fully square corners instead of rounded ones.                                       |
-| `swayfx-git`               | SwayFX compositor with shadows, blur, and rounded corners, built against wlroots 0.20.                          |
-| `ttf-googlesans-code`      | Google Sans Code, Google's monospace coding font.                                                               |
-| `ttf-googlesans-code-nerd` | Google Sans Code patched with Nerd Font icons.                                                                  |
-| `ttf-noto-sans-mono-nerd`  | Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo static TrueType variants.       |
-| `wayfreeze-git`            | Pauses your screen so you can draw a selection and take a screenshot without anything moving under your cursor. |
-| `xdg-terminal-exec-git`    | Lets apps and scripts open your preferred terminal emulator without needing to know which one you use.          |
+For setup instructions and the list of available packages, see [renownitall.github.io/forge](https://renownitall.github.io/forge).
 
 ---
 
