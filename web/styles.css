@@ -371,6 +371,12 @@ footer p + p {
   margin-top: var(--space-2);
 }
 
+@media (max-width: 34rem) {
+  body {
+    padding: var(--space-5);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
