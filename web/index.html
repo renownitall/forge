@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
+      name="theme-color"
+      content="#fafafa"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#121212"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
       name="description"
       content="Forge, renowned's Arch Linux package repository: browse available packages, set up the repo, and install with pacman"
     />
@@ -11,10 +21,14 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <script>
       (() => {
-        const saved = localStorage.getItem("forge-theme");
+        let saved = null;
+        try {
+          saved = localStorage.getItem("forge-theme");
+        } catch {}
+        const stored = saved === "dark" || saved === "light" ? saved : null;
         const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         document.documentElement.dataset.theme =
-          saved || (dark ? "dark" : "light");
+          stored || (dark ? "dark" : "light");
         document.documentElement.classList.add("js");
       })();
     </script>
@@ -42,7 +56,22 @@
           type="button"
           aria-label="Toggle theme"
           title="Toggle theme"
-        ></button>
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+          </svg>
+        </button>
       </div>
       <p class="meta">
         <strong
@@ -147,8 +176,16 @@ sudo pacman -S PACKAGE_NAME</code></pre>
           </div>
           <span class="count" id="count" role="status"></span>
         </div>
-        <div class="table-wrap">
+        <div
+          class="table-wrap"
+          tabindex="0"
+          role="region"
+          aria-labelledby="packages-title"
+        >
           <table>
+            <caption class="sr-only">
+              Packages
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Package</th>
