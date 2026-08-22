@@ -8,6 +8,11 @@ on:
       - ".github/workflows/build.yml"
       - ".github/actions/**"
   workflow_dispatch:
+    inputs:
+      check_upstream:
+        description: "Only rebuild -git packages whose upstream moved past what is published"
+        type: boolean
+        default: false
   schedule:
     - cron: "37 4 * * *"
 
@@ -71,10 +76,98 @@ jobs:
               fi
             fi
           else
-            if [[ "${{ github.event_name }}" == "schedule" ]]; then
-              PACKAGES=$(echo "$ALL_PACKAGES" | tr ' ' '\n' | grep -E -- '-git$' | xargs || true)
-            else
-              PACKAGES="$ALL_PACKAGES"
+            # Scheduled runs rebuild -git packages only when upstream moved
+            # past what is already published. Manual runs opt in via input.
+            FILTER="false"
+            CANDIDATES="$ALL_PACKAGES"
+            if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.check_upstream }}" == "true" ]]; then
+              FILTER="true"
+              CANDIDATES=$(echo "$ALL_PACKAGES" | grep -E -- '-git$' || true)
+            fi
+
+            PACKAGES="$CANDIDATES"
+
+            if [[ "$FILTER" == "true" ]]; then
+              # The published manifest records what users currently have.
+              # If it is unavailable the filter below fails open and keeps
+              # every candidate, preserving today's rebuild-all behavior.
+              PUBLISHED="/tmp/published-packages.json"
+              if ! curl -fsSL --connect-timeout 15 --max-time 60 -o "$PUBLISHED" "${PAGES_URL}/packages.json"; then
+                echo "::warning::Could not fetch published manifest; rebuilding all -git candidates"
+                rm -f "$PUBLISHED"
+              fi
+
+              KEEP=""
+              for pkg in $CANDIDATES; do
+                # Revision baked into the published package, e.g.
+                # 0.0.0.r16.gcdef1c8-1 -> cdef1c8 or r7135.8775477-1 -> 8775477
+                version=$(jq -r --arg base "$pkg" \
+                  '.packages[] | select(.base == $base) | .version // empty' \
+                  "$PUBLISHED" 2>/dev/null || true)
+                published_sha=""
+                if [ -n "$version" ]; then
+                  version="${version%-*}"
+                  last="${version##*.}"
+                  last="${last#g}"
+                  case "$last" in
+                    *[!0-9a-f]*|"") published_sha="" ;;
+                    [0-9a-f]*) [ "${#last}" -ge 7 ] && [ "${#last}" -le 40 ] && published_sha="$last" ;;
+                  esac
+                fi
+
+                if [ -z "$published_sha" ]; then
+                  echo "  Build $pkg (not published or no git revision in '$version')"
+                  KEEP="$KEEP $pkg"
+                  continue
+                fi
+
+                # Unpinned git source URLs; pinned ones (#commit=/#tag=) can
+                # only change via a PKGBUILD push, which has its own path.
+                sources=$(
+                  cd "packages/$pkg" || exit
+                  source ./PKGBUILD
+                  printf '%s\n' "${source[@]}"
+                ) || { echo "  Build $pkg (could not read PKGBUILD)"; KEEP="$KEEP $pkg"; continue; }
+
+                urls=$(printf '%s\n' "$sources" \
+                  | awk -F'git\\+' '$2 {print $2}' \
+                  | grep -vE '#(commit|tag)=' ) || true
+                url_count=$(printf '%s' "$urls" | grep -c . || true)
+
+                if [ "$url_count" != "1" ]; then
+                  echo "  Build $pkg (expected 1 unpinned git source, found $url_count)"
+                  KEEP="$KEEP $pkg"
+                  continue
+                fi
+                url=$(printf '%s\n' "$urls" | head -n1)
+
+                ref="HEAD"
+                case "$url" in *'#branch='*) ref="refs/heads/${url##*#branch=}";; esac
+                url="${url%%#*}"
+
+                remote_sha=""
+                attempt=1
+                while [ "$attempt" -le 3 ] && [ -z "$remote_sha" ]; do
+                  remote_sha=$(git ls-remote "$url" "$ref" 2>/dev/null | awk '{print $1; exit}') || remote_sha=""
+                  if [ -n "$remote_sha" ]; then break; fi
+                  if [ "$attempt" -lt 3 ]; then sleep 10; fi
+                  attempt=$((attempt + 1))
+                done
+                if [ -z "$remote_sha" ]; then
+                  echo "  Build $pkg (ls-remote failed after 3 attempts)"
+                  KEEP="$KEEP $pkg"
+                  continue
+                fi
+
+                if [[ "$remote_sha" == "$published_sha"* ]]; then
+                  echo "  Skip  $pkg (upstream ${remote_sha:0:7} matches published $published_sha)"
+                else
+                  echo "  Build $pkg (upstream ${remote_sha:0:7} != published $published_sha)"
+                  KEEP="$KEEP $pkg"
+                fi
+              done
+
+              PACKAGES=$(echo "$KEEP" | xargs)
             fi
           fi
 
