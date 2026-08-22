@@ -6,6 +6,8 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/site.yml"
+      - ".github/workflows/deploy-pages.yml"
+      - ".github/actions/stage-site/**"
   workflow_dispatch:
 
 env:
@@ -47,18 +49,7 @@ jobs:
           ls -lah repo/ || true
 
       - name: Stage site
-        env:
-          SHORT_SHA: ${{ github.sha }}
-        run: |
-          cp -R "$GITHUB_WORKSPACE/web/." repo/
-
-          short_sha="${SHORT_SHA:0:7}"
-          sed -i "s|styles.css|styles.css?v=${short_sha}|; s|app.js|app.js?v=${short_sha}|" repo/index.html
-          sed -i "s|packages.json|packages.json?v=${short_sha}|" repo/app.js
-
-          echo "Staged site contents:"
-          ls -lah repo/
-          grep -o 'styles.css?v=[a-f0-9]*' repo/index.html || true
+        uses: ./.github/actions/stage-site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -68,17 +59,7 @@ jobs:
   deploy:
     needs: site
     if: ${{ !cancelled() && !failure() && needs.site.result == 'success' }}
-    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    concurrency:
-      group: "pages"
-      cancel-in-progress: true
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+    uses: ./.github/workflows/deploy-pages.yml

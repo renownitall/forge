@@ -6,7 +6,9 @@ on:
     paths:
       - "packages/**"
       - ".github/workflows/build.yml"
+      - ".github/workflows/deploy-pages.yml"
       - ".github/actions/**"
+      - ".github/scripts/**"
   workflow_dispatch:
     inputs:
       check_upstream:
@@ -249,26 +251,10 @@ jobs:
 
       - name: Setup build environment
         run: |
-          # Mirrors are occasionally flaky; retry the package manager steps so
-          # a single transient mirror/network failure does not fail every
-          # package for the day.
-          retry() {
-            local attempt=1
-            until "$@"; do
-              attempt=$((attempt + 1))
-              if [ "$attempt" -gt 3 ]; then
-                echo "::error::Command failed after 3 attempts: $*"
-                return 1
-              fi
-              echo "::warning::Command failed (attempt $((attempt - 1))/3), retrying in 10s: $*"
-              sleep 10
-            done
-          }
-
           pacman-key --init
           pacman-key --populate archlinux
-          retry pacman -Syu --noconfirm --noprogressbar
-          retry pacman -S --noconfirm --needed --noprogressbar git mold pacman-contrib
+          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar
+          .github/scripts/retry.sh pacman -S --noconfirm --needed --noprogressbar git mold pacman-contrib
 
           sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3/g' /etc/makepkg.conf
           sed -i '/^OPTIONS=/s/!lto/lto/' /etc/makepkg.conf
@@ -352,25 +338,10 @@ jobs:
 
       - name: Install repo tools
         run: |
-          # Mirrors are occasionally flaky; retry so a single transient
-          # mirror/network failure does not block the repository update.
-          retry() {
-            local attempt=1
-            until "$@"; do
-              attempt=$((attempt + 1))
-              if [ "$attempt" -gt 3 ]; then
-                echo "::error::Command failed after 3 attempts: $*"
-                return 1
-              fi
-              echo "::warning::Command failed (attempt $((attempt - 1))/3), retrying in 10s: $*"
-              sleep 10
-            done
-          }
-
           pacman-key --init
           pacman-key --populate archlinux
           # repo-add ships with pacman; jq formats the package manifest.
-          retry pacman -Syu --noconfirm --noprogressbar jq
+          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar jq
 
       - name: Setup GPG
         uses: ./.github/actions/setup-gpg
@@ -421,9 +392,7 @@ jobs:
           echo "Repository contents:"
           ls -lah
 
-      - name: Generate package manifest and stage site
-        env:
-          SHORT_SHA: ${{ github.sha }}
+      - name: Generate package manifest
         run: |
           cd repo
 
@@ -453,11 +422,8 @@ jobs:
             | jq -s '{packages: .}' \
             > packages.json
 
-          cp -R "$GITHUB_WORKSPACE/web/." .
-
-          short_sha="${SHORT_SHA:0:7}"
-          sed -i "s|styles.css|styles.css?v=${short_sha}|; s|app.js|app.js?v=${short_sha}|" index.html
-          sed -i "s|packages.json|packages.json?v=${short_sha}|" app.js
+      - name: Stage site
+        uses: ./.github/actions/stage-site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -467,18 +433,8 @@ jobs:
   deploy:
     needs: repo
     if: ${{ !cancelled() && !failure() && needs.repo.result == 'success' }}
-    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    concurrency:
-      group: "pages"
-      cancel-in-progress: true
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+    uses: ./.github/workflows/deploy-pages.yml
 

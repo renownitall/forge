@@ -1,0 +1,25 @@
+name: "Stage Site"
+description: "Copies web/ over the publish directory and cache-busts asset URLs per commit"
+inputs:
+  dest:
+    description: "Publish directory to stage web assets into"
+    required: false
+    default: repo
+runs:
+  using: "composite"
+  steps:
+    - name: Copy site and bust caches
+      shell: bash
+      env:
+        DEST: ${{ inputs.dest }}
+        SHORT_SHA: ${{ github.sha }}
+      run: |
+        mkdir -p "$DEST"
+        cp -R "$GITHUB_WORKSPACE/web/." "$DEST"/
+
+        short_sha="${SHORT_SHA:0:7}"
+        sed -i "s|styles.css|styles.css?v=${short_sha}|; s|app.js|app.js?v=${short_sha}|" "$DEST/index.html"
+        sed -i "s|packages.json|packages.json?v=${short_sha}|" "$DEST/app.js"
+
+        echo "Staged site contents:"
+        ls -lah "$DEST"
