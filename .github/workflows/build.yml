@@ -72,7 +72,7 @@ jobs:
             fi
           else
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
-              PACKAGES=""
+              PACKAGES=$(echo "$ALL_PACKAGES" | tr ' ' '\n' | grep -E -- '-git$' | xargs || true)
             else
               PACKAGES="$ALL_PACKAGES"
             fi
