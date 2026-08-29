@@ -1,6 +1,6 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 pkgname=orchis-theme-square
-pkgver=2026.08.10
+pkgver=2026.08.24
 pkgrel=1
 pkgdesc="Orchis GTK theme built with fully square corners"
 arch=('any')

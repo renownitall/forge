@@ -1,6 +1,6 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 pkgname=ttf-noto-sans-mono-nerd
-pkgver=3.5.0
+pkgver=3.5.1
 pkgrel=1
 pkgdesc="Noto Sans Mono patched with Nerd Fonts in all weights, with NF, Mono, and Propo variants"
 arch=('any')
@@ -10,7 +10,7 @@ depends=('fontconfig')
 provides=('ttf-font' 'nerd-fonts' 'ttf-noto-sans-mono-nerd' 'ttf-noto-sans-mono-nf')
 conflicts=('ttf-noto-sans-mono-nerd-git')
 source=("Noto-${pkgver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${pkgver}/Noto.zip")
-sha256sums=('11e6dba0bb1a11f56774f77e7e0eb5b23cc779012163688c4362b57820c9c9af')
+sha256sums=('3258ff3163691cf089cf4c0e4140ec7d564eeb918a7e67786145e94ed124e1e8')
 
 package() {
   cd "$srcdir"

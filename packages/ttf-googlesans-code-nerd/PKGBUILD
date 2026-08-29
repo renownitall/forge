@@ -1,6 +1,6 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 pkgname=ttf-googlesans-code-nerd
-pkgver=3.5.0
+pkgver=3.5.1
 pkgrel=1
 epoch=1
 pkgdesc="Google Sans Code patched with Nerd Font icons"
@@ -11,7 +11,7 @@ depends=('fontconfig')
 provides=('ttf-font' 'nerd-fonts' 'ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-mono' 'ttf-googlesans-code-nerd-propo')
 conflicts=('ttf-google-sans-code-nerd' 'ttf-google-sans-code-nf' 'ttf-google-sans-code-nerd-font' 'ttf-googlesans-code-nerd-git')
 source=("GoogleSansCode-${pkgver}.zip::https://github.com/ryanoasis/nerd-fonts/releases/download/v${pkgver}/GoogleSansCode.zip")
-sha256sums=('524485e914b365b04c8e443773e43cbc43786f64b44131f0efe26166db12b1af')
+sha256sums=('b09b9a0410fe95d3720c48aa51bb34304af19a0a06cacefab042d2cc709e1a76')
 
 package() {
   cd "$srcdir"

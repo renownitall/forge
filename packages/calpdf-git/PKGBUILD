@@ -1,7 +1,7 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 _pkgname=calpdf
 pkgname=${_pkgname}-git
-pkgver=0.0.0.r14.g5a4ff9c
+pkgver=0.0.0.r21.gd1a4db1
 pkgrel=1
 pkgdesc="PDF toolkit to run alongside Calibre: download and swap covers, shrink PDFs, and export or rewrite bookmarks (git)"
 arch=('any')

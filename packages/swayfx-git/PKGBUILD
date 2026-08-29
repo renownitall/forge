@@ -1,7 +1,7 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
 _pkgname=swayfx
 pkgname=$_pkgname-git
-pkgver=r7069.03a0796
+pkgver=r7135.8775477
 pkgrel=1
 pkgdesc="Sway compositor with shadows, blur, and rounded corners, built against wlroots 0.20 (git)"
 arch=('x86_64')
@@ -38,7 +38,7 @@ makedepends=(
 options=(!debug)
 source=(
   "$_pkgname::git+$url.git"
-  "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=26200c5d9fa947a1d3b0935d3f9237229cd3e5ba"
+  "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=ec7c1594272428f82b6062fa4a60336e4a2b00e9"
 )
 sha256sums=('SKIP'
   'SKIP')

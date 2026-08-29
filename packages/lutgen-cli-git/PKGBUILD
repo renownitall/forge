@@ -3,7 +3,7 @@
 
 _pkgname=lutgen
 pkgname=lutgen-cli-git
-pkgver=1.1.1.r1.gd7780e8
+pkgver=1.1.1.r6.gd680b23
 pkgrel=1
 pkgdesc="Recolor images to match a color theme such as Catppuccin, Gruvbox, or Nord (git)"
 arch=('x86_64')

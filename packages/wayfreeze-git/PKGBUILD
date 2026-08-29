@@ -2,7 +2,7 @@
 # Contributor: OGIOS <ogios@foxmail.com>
 _pkgname=wayfreeze
 pkgname=wayfreeze-git
-pkgver=r81.8f813ab
+pkgver=r90.59ac913
 pkgrel=1
 pkgdesc="Freeze the screen to draw a selection and take a screenshot without movement underneath (git)"
 arch=('x86_64')
