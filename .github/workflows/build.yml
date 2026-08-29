@@ -58,7 +58,18 @@ jobs:
             if [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]]; then
               PACKAGES="$ALL_PACKAGES"
             else
-              CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} -- packages/ | cut -d/ -f2 | sort -u)
+              # Handle force-pushes where before is orphaned and not fetched
+              # (e.g. amended commits). Fall back to HEAD~1 diff if needed.
+              if ! git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+                echo "::warning::before SHA ${{ github.event.before }} not found locally, attempting to fetch"
+                git fetch origin "${{ github.event.before }}" --depth=1 2>/dev/null || true
+              fi
+              if git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+                CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}" -- packages/ | cut -d/ -f2 | sort -u)
+              else
+                echo "::warning::before SHA still not found, falling back to HEAD~1 diff"
+                CHANGED=$(git diff --name-only HEAD~1 HEAD -- packages/ 2>/dev/null | cut -d/ -f2 | sort -u || true)
+              fi
               PACKAGES=""
               for pkg in $CHANGED; do
                 if echo "$ALL_PACKAGES" | grep -qx "$pkg"; then
