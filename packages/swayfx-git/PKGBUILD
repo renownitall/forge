@@ -38,7 +38,7 @@ makedepends=(
 options=(!debug)
 source=(
   "$_pkgname::git+$url.git"
-  "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=ec7c1594272428f82b6062fa4a60336e4a2b00e9"
+  "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=ec7c1599d9b7b67d3772f8f3ec67ac0681d70853"
 )
 sha256sums=('SKIP'
   'SKIP')

@@ -78,14 +78,23 @@ jobs:
               done
             fi
 
-            # Empty commit with ci(rebuild): <pkg> triggers a single-package rebuild.
+            # Empty commit with ci(rebuild): <pkg>[, <pkg>...] triggers rebuild(s).
             if [ -z "$PACKAGES" ]; then
               MSG=$(git log -1 --format=%s ${{ github.sha }})
               if [[ "$MSG" =~ ^ci\(rebuild\):[[:space:]]+(.+)$ ]]; then
-                TARGET="${BASH_REMATCH[1]}"
-                if echo "$ALL_PACKAGES" | grep -qx "$TARGET"; then
-                  PACKAGES="$TARGET"
-                fi
+                RAW="${BASH_REMATCH[1]}"
+                PACKAGES=""
+                IFS=',' read -ra REQS <<< "$RAW"
+                for raw in "${REQS[@]}"; do
+                  pkg=$(echo "$raw" | xargs)
+                  [ -z "$pkg" ] && continue
+                  if echo "$ALL_PACKAGES" | grep -qx "$pkg"; then
+                    PACKAGES="$PACKAGES $pkg"
+                  else
+                    echo "::warning::unknown package '$pkg' in ci(rebuild)"
+                  fi
+                done
+                PACKAGES=$(echo "$PACKAGES" | tr ' ' '\n' | sort -u | xargs)
               fi
             fi
           else
