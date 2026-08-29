@@ -3,12 +3,6 @@ name: Build Arch Packages
 on:
   push:
     branches: [main]
-    paths:
-      - "packages/**"
-      - ".github/workflows/build.yml"
-      - ".github/workflows/deploy-pages.yml"
-      - ".github/actions/**"
-      - ".github/scripts/**"
   workflow_dispatch:
     inputs:
       check_upstream:
