@@ -30,6 +30,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_packages: ${{ steps.set-matrix.outputs.has_packages }}
+      has_removed: ${{ steps.set-matrix.outputs.has_removed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,10 +45,12 @@ jobs:
           if [ -z "$ALL_PACKAGES" ]; then
             echo "has_packages=false" >> "$GITHUB_OUTPUT"
             echo "matrix={\"package\":[]}" >> "$GITHUB_OUTPUT"
+            echo "has_removed=false" >> "$GITHUB_OUTPUT"
             echo "No packages found in repository"
             exit 0
           fi
 
+          REMOVED=""
           if [[ "${{ github.event_name }}" == "push" ]]; then
             if [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]]; then
               PACKAGES="$ALL_PACKAGES"
@@ -70,6 +73,17 @@ jobs:
                   PACKAGES="$PACKAGES $pkg"
                 fi
               done
+              # Deletions: CHANGED contains bases no longer in ALL_PACKAGES
+              REMOVED=""
+              for pkg in $CHANGED; do
+                if ! echo "$ALL_PACKAGES" | grep -qx "$pkg"; then
+                  REMOVED="$REMOVED $pkg"
+                fi
+              done
+              REMOVED=$(echo "$REMOVED" | xargs)
+              if [ -n "$REMOVED" ]; then
+                echo "Removed packages detected: $REMOVED"
+              fi
             fi
 
             # Empty commit with ci(rebuild): <pkg>[, <pkg>...] triggers rebuild(s).
@@ -198,6 +212,25 @@ jobs:
             echo "has_packages=true" >> "$GITHUB_OUTPUT"
             echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
             echo "Building: $PACKAGES"
+          fi
+
+          # push events only: detect removals so repo can prune live DB
+          # 1) git diff removals (REMOVED) 2) stale published entries still on Pages
+          STALE=""
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            if curl -fsSL --connect-timeout 10 --max-time 30 "${PAGES_URL}/packages.json" -o /tmp/live-packages.json 2>/dev/null; then
+              STALE=$(jq -r --argjson bases "$(printf '%s\n' "$ALL_PACKAGES" | jq -R . | jq -s .)" '.packages[] | select(.base as $b | $bases | index($b) | not) | .base' /tmp/live-packages.json 2>/dev/null | sort -u | xargs || true)
+              if [ -n "$STALE" ]; then
+                echo "Stale published packages detected: $STALE"
+              fi
+            fi
+          fi
+          if [[ "${{ github.event_name }}" == "push" && ( -n "${REMOVED:-}" || -n "${STALE:-}" ) ]]; then
+            COMBINED=$(echo "$REMOVED $STALE" | tr ' ' '\n' | sort -u | xargs)
+            echo "has_removed=true" >> "$GITHUB_OUTPUT"
+            echo "Pruning required for: $COMBINED"
+          else
+            echo "has_removed=false" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -340,7 +373,7 @@ jobs:
 
   repo:
     needs: [changed-packages, build]
-    if: ${{ !cancelled() && !failure() && needs.changed-packages.outputs.has_packages == 'true' }}
+    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && needs.build.result != 'cancelled' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
@@ -365,6 +398,7 @@ jobs:
           user: root
 
       - name: Download all package artifacts
+        if: needs.changed-packages.outputs.has_packages == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts/
