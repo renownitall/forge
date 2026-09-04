@@ -123,12 +123,22 @@ const syncThemeIcon = () => {
   themeBtn.innerHTML = themeRoot.dataset.theme === "dark" ? SUN_SVG : MOON_SVG;
 };
 
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+const applySystemTheme = (e) => {
+  themeRoot.dataset.theme = e.matches ? "dark" : "light";
+  syncThemeIcon();
+};
+try {
+  mq.addEventListener("change", applySystemTheme);
+} catch {
+  try {
+    mq.addListener(applySystemTheme);
+  } catch {}
+}
+
 themeBtn.addEventListener("click", () => {
   const next = themeRoot.dataset.theme === "dark" ? "light" : "dark";
   themeRoot.dataset.theme = next;
-  try {
-    localStorage.setItem("forge-theme", next);
-  } catch {}
   syncThemeIcon();
 });
 

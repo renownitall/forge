@@ -26,17 +26,21 @@
     <link rel="manifest" href="manifest.json" />
     <script>
       (() => {
-        let saved = null;
-        try {
-          saved = localStorage.getItem("forge-theme");
-        } catch (err) {
-          console.warn("Failed to read forge-theme:", err);
-        }
-        const stored = saved === "dark" || saved === "light" ? saved : null;
-        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        document.documentElement.dataset.theme =
-          stored || (dark ? "dark" : "light");
+        const mq = window.matchMedia("(prefers-color-scheme: dark)");
+        const apply = () => {
+          document.documentElement.dataset.theme = mq.matches
+            ? "dark"
+            : "light";
+        };
+        apply();
         document.documentElement.classList.add("js");
+        try {
+          mq.addEventListener("change", apply);
+        } catch {
+          try {
+            mq.addListener(apply);
+          } catch {}
+        }
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
