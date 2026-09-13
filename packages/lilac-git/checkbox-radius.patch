@@ -1,0 +1,19 @@
+From: forge build <64113367+renownitall@users.noreply.github.com>
+Subject: [PATCH] Derive the checkbox corner radius from the CornerRadius setting
+
+Upstream hardcodes checkBoxCornerRadius to 6 and never updates it from
+settings, so non-circle checkboxes keep a 6px rounding even with
+CornerRadius=0. Halving matches the other secondary radii
+(menuItemBorderRadius, listViewItemBorderRadius) and preserves the
+default rendering exactly (12 / 2 = 6).
+
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -57,6 +57,7 @@ void Config::onSettingsChanged() {
+     listViewItemBorderRadius = settingsCornerRadius / 2;
+     controlsCornerRadius = settingsCornerRadius;
+     tabCornerRadius = settingsCornerRadius;
++    checkBoxCornerRadius = settingsCornerRadius / 2;
+ 
+     circleCheckBox = settings->circleCheckBox();
+     animationSpeed = settings->animationSpeed();

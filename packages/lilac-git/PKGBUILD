@@ -20,14 +20,30 @@ makedepends=(
   'git'
 )
 options=(!debug)
-source=("$_pkgname::git+$url.git")
-sha256sums=('SKIP')
+source=(
+  "$_pkgname::git+$url.git"
+  'checkbox-radius.patch'
+  'lilacrc'
+)
+sha256sums=(
+  'SKIP'
+  'bdeb9c4093a279c2ecfecce1cdbdf44a60448bcb14b08faf61142de8c2c5ca38'
+  '25614c27e5b2114b70c0f6f9ffa1d5861f256572e97571c14f6ef02bb87991ff'
+)
+backup=('etc/xdg/lilacrc')
 
 pkgver() {
   cd "$srcdir/$_pkgname"
   git describe --long --tags --abbrev=7 2>/dev/null |
     sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
     printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$srcdir/$_pkgname"
+  # Upstream ignores the CornerRadius setting for non-circle checkboxes
+  # (hardcoded 6px); derive it so CornerRadius=0 is fully square.
+  patch -Np1 -i "$srcdir/checkbox-radius.patch"
 }
 
 build() {
@@ -51,4 +67,8 @@ package() {
   cd "$srcdir/$_pkgname"
   DESTDIR="$pkgdir" cmake --install build
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # Ship square corners by default. KConfig falls back to /etc/xdg when
+  # the user has no ~/.config/lilacrc, so this stays overridable via
+  # the lilacsettings app (takes effect for newly started apps).
+  install -Dm644 "$srcdir/lilacrc" "$pkgdir/etc/xdg/lilacrc"
 }
