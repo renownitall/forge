@@ -1,0 +1,54 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+_pkgname=lilac
+pkgname=lilac-git
+pkgver=0.0.1.r21.gb318cfb
+pkgrel=1
+pkgdesc="Modern Qt6 application style based on the Orchis GTK theme (git)"
+arch=('x86_64')
+url="https://github.com/zalesyc/lilac"
+license=('GPL-3.0-or-later')
+provides=('lilac')
+conflicts=('lilac')
+depends=(
+  'qt6-base'
+  'kconfig'
+  'kwindowsystem'
+  'qt6-declarative'
+)
+makedepends=(
+  'cmake'
+  'git'
+)
+options=(!debug)
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$_pkgname"
+  git describe --long --tags --abbrev=7 2>/dev/null |
+    sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "$srcdir/$_pkgname"
+  # Upstream CMakeLists uses CMAKE_INSTALL_LIBDIR/DATAROOTDIR without
+  # including GNUInstallDirs, so set both explicitly. KStyle targets KDE
+  # Plasma (upstream recommends QCommonStyle elsewhere) and KColorScheme
+  # would read KDE color-scheme files instead of the qt6ct palette, so
+  # both stay off on a qt6ct-driven setup.
+  cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_INSTALL_DATAROOTDIR=share \
+    -DNO_KSTYLE=ON \
+    -DNO_KCOLORSCHEME=ON
+  cmake --build build --parallel
+}
+
+package() {
+  cd "$srcdir/$_pkgname"
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
