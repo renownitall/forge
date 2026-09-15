@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       check_upstream:
-        description: "Only rebuild -git packages whose upstream moved past what is published"
+        description: "Only rebuild packages whose upstream moved past what is published"
         type: boolean
         default: false
   schedule:
@@ -106,16 +106,14 @@ jobs:
               fi
             fi
           else
-            # Scheduled runs rebuild -git packages only when upstream moved
-            # past what is already published. Manual runs opt in via input.
+            # Scheduled runs rebuild packages only when upstream moved past
+            # what is already published. Manual runs opt in via input.
             FILTER="false"
-            CANDIDATES="$ALL_PACKAGES"
             if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.check_upstream }}" == "true" ]]; then
               FILTER="true"
-              CANDIDATES=$(echo "$ALL_PACKAGES" | grep -E -- '-git$' || true)
             fi
 
-            PACKAGES="$CANDIDATES"
+            PACKAGES="$ALL_PACKAGES"
 
             if [[ "$FILTER" == "true" ]]; then
               # The published manifest records what users currently have.
@@ -123,76 +121,158 @@ jobs:
               # every candidate, preserving today's rebuild-all behavior.
               PUBLISHED="/tmp/published-packages.json"
               if ! curl -fsSL --connect-timeout 15 --max-time 60 -o "$PUBLISHED" "${PAGES_URL}/packages.json"; then
-                echo "::warning::Could not fetch published manifest; rebuilding all -git candidates"
+                echo "::warning::Could not fetch published manifest; rebuilding all candidates"
                 rm -f "$PUBLISHED"
               fi
 
               KEEP=""
-              for pkg in $CANDIDATES; do
-                # Revision baked into the published package, e.g.
-                # 0.0.0.r16.gcdef1c8-1 -> cdef1c8 or r7135.8775477-1 -> 8775477
+              for pkg in $ALL_PACKAGES; do
+                # Version without pkgrel and epoch, e.g.
+                # 0.0.0.r16.gcdef1c8-1 -> 0.0.0.r16.gcdef1c8 or 1:1.7.2-1 -> 1.7.2
                 version=$(jq -r --arg base "$pkg" \
                   '.packages[] | select(.base == $base) | .version // empty' \
                   "$PUBLISHED" 2>/dev/null || true)
-                published_sha=""
+                base_version=""
                 if [ -n "$version" ]; then
-                  version="${version%-*}"
-                  last="${version##*.}"
-                  last="${last#g}"
-                  case "$last" in
-                    *[!0-9a-f]*|"") published_sha="" ;;
-                    [0-9a-f]*) [ "${#last}" -ge 7 ] && [ "${#last}" -le 40 ] && published_sha="$last" ;;
-                  esac
+                  base_version="${version%-*}"
+                  base_version="${base_version##*:}"
                 fi
 
-                if [ -z "$published_sha" ]; then
-                  echo "  Build $pkg (not published or no git revision in '$version')"
-                  KEEP="$KEEP $pkg"
-                  continue
+                # Revision baked into the version, e.g.
+                # 0.0.0.r16.gcdef1c8 -> cdef1c8 or r7135.8775477 -> 8775477
+                published_sha=""
+                last="${base_version##*.}"
+                last="${last#g}"
+                case "$last" in
+                  *[!0-9a-f]*|"") published_sha="" ;;
+                  [0-9a-f]*) [ "${#last}" -ge 7 ] && [ "${#last}" -le 40 ] && published_sha="$last" ;;
+                esac
+
+                # Commit-date version, e.g. 2026.08.24
+                published_date=""
+                if [[ "$base_version" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+                  published_date="$base_version"
                 fi
 
-                # Unpinned git source URLs; pinned ones (#commit=/#tag=) can
-                # only change via a PKGBUILD push, which has its own path.
                 sources=$(
                   cd "packages/$pkg" || exit
                   source ./PKGBUILD
                   printf '%s\n' "${source[@]}"
                 ) || { echo "  Build $pkg (could not read PKGBUILD)"; KEEP="$KEEP $pkg"; continue; }
 
+                # Unpinned git source URLs; pinned ones (#commit=/#tag=) can
+                # only change via a PKGBUILD push, which has its own path.
                 urls=$(printf '%s\n' "$sources" \
                   | awk -F'git\\+' '$2 {print $2}' \
                   | grep -vE '#(commit|tag)=' ) || true
                 url_count=$(printf '%s' "$urls" | grep -c . || true)
 
-                if [ "$url_count" != "1" ]; then
+                if [ "$url_count" -gt 1 ]; then
                   echo "  Build $pkg (expected 1 unpinned git source, found $url_count)"
                   KEEP="$KEEP $pkg"
                   continue
                 fi
-                url=$(printf '%s\n' "$urls" | head -n1)
 
-                ref="HEAD"
-                case "$url" in *'#branch='*) ref="refs/heads/${url##*#branch=}";; esac
-                url="${url%%#*}"
+                if [ "$url_count" -eq 1 ]; then
+                  url=$(printf '%s\n' "$urls" | head -n1)
 
-                remote_sha=""
+                  ref="HEAD"
+                  case "$url" in *'#branch='*) ref="refs/heads/${url##*#branch=}";; esac
+                  url="${url%%#*}"
+
+                  remote_sha=""
+                  attempt=1
+                  while [ "$attempt" -le 3 ] && [ -z "$remote_sha" ]; do
+                    remote_sha=$(git ls-remote "$url" "$ref" 2>/dev/null | awk '{print $1; exit}') || remote_sha=""
+                    if [ -n "$remote_sha" ]; then break; fi
+                    if [ "$attempt" -lt 3 ]; then sleep 10; fi
+                    attempt=$((attempt + 1))
+                  done
+                  if [ -z "$remote_sha" ]; then
+                    echo "  Build $pkg (ls-remote failed after 3 attempts)"
+                    KEEP="$KEEP $pkg"
+                    continue
+                  fi
+
+                  if [ -n "$published_sha" ]; then
+                    if [[ "$remote_sha" == "$published_sha"* ]]; then
+                      echo "  Skip  $pkg (upstream ${remote_sha:0:7} matches published $published_sha)"
+                    else
+                      echo "  Build $pkg (upstream ${remote_sha:0:7} != published $published_sha)"
+                      KEEP="$KEEP $pkg"
+                    fi
+                  elif [ -n "$published_date" ]; then
+                    # Commit-date-versioned packages (pkgver = last upstream
+                    # commit date): resolve the upstream HEAD commit date.
+                    upstream_date=""
+                    if [[ "$url" =~ ^https://github\.com/([^/]+)/([^/]+)/?$ ]]; then
+                      api="https://api.github.com/repos/${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+                      attempt=1
+                      while [ "$attempt" -le 3 ] && [ -z "$upstream_date" ]; do
+                        upstream_date=$(curl -fsSL --connect-timeout 15 --max-time 30 "$api/commits/$remote_sha" 2>/dev/null | jq -r '.commit.committer.date // empty') || upstream_date=""
+                        if [ -n "$upstream_date" ]; then break; fi
+                        if [ "$attempt" -lt 3 ]; then sleep 10; fi
+                        attempt=$((attempt + 1))
+                      done
+                    fi
+                    upstream_date="${upstream_date:0:10}"
+                    if [[ "$upstream_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                      upstream_date="${upstream_date//-/.}"
+                      # Newer upstream date means upstream moved; equal or
+                      # older means the published build is already current.
+                      if [[ "$upstream_date" > "$published_date" ]]; then
+                        echo "  Build $pkg (upstream $upstream_date != published $published_date)"
+                        KEEP="$KEEP $pkg"
+                      else
+                        echo "  Skip  $pkg (upstream $upstream_date not past published $published_date)"
+                      fi
+                    else
+                      echo "  Build $pkg (could not resolve upstream commit date)"
+                      KEEP="$KEEP $pkg"
+                    fi
+                  else
+                    echo "  Build $pkg (not published or no comparable revision in '${version}')"
+                    KEEP="$KEEP $pkg"
+                  fi
+                  continue
+                fi
+
+                # No git sources: probe release archives
+                # (e.g. .../releases/download/v1.7.2/...) against the newest
+                # version-like upstream tag.
+                release_url=$(printf '%s\n' "$sources" | grep -m1 'releases/download/') || true
+                # Source entries may be prefixed with a filename: drop it.
+                release_url="${release_url#*::}"
+                if [ -z "$release_url" ]; then
+                  echo "  Build $pkg (no git source or release archive to probe)"
+                  KEEP="$KEEP $pkg"
+                  continue
+                fi
+                release_tag="${release_url#*releases/download/}"
+                release_tag="${release_tag%%/*}"
+                repo_url="${release_url%%/releases/*}"
+
+                remote_tag=""
                 attempt=1
-                while [ "$attempt" -le 3 ] && [ -z "$remote_sha" ]; do
-                  remote_sha=$(git ls-remote "$url" "$ref" 2>/dev/null | awk '{print $1; exit}') || remote_sha=""
-                  if [ -n "$remote_sha" ]; then break; fi
+                while [ "$attempt" -le 3 ] && [ -z "$remote_tag" ]; do
+                  remote_tag=$(git ls-remote --tags --refs "$repo_url" 2>/dev/null \
+                    | awk -F'/' '{print $NF}' \
+                    | grep -E '^[vV]?[0-9]+([._-][0-9]+)*$' \
+                    | sort -V | tail -n1) || remote_tag=""
+                  if [ -n "$remote_tag" ]; then break; fi
                   if [ "$attempt" -lt 3 ]; then sleep 10; fi
                   attempt=$((attempt + 1))
                 done
-                if [ -z "$remote_sha" ]; then
-                  echo "  Build $pkg (ls-remote failed after 3 attempts)"
+                if [ -z "$remote_tag" ]; then
+                  echo "  Build $pkg (ls-remote tags failed after 3 attempts)"
                   KEEP="$KEEP $pkg"
                   continue
                 fi
 
-                if [[ "$remote_sha" == "$published_sha"* ]]; then
-                  echo "  Skip  $pkg (upstream ${remote_sha:0:7} matches published $published_sha)"
+                if [[ "${remote_tag#[vV]}" == "${release_tag#[vV]}" ]]; then
+                  echo "  Skip  $pkg (latest tag $remote_tag matches published $release_tag)"
                 else
-                  echo "  Build $pkg (upstream ${remote_sha:0:7} != published $published_sha)"
+                  echo "  Build $pkg (latest tag $remote_tag != published $release_tag)"
                   KEEP="$KEEP $pkg"
                 fi
               done
