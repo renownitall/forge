@@ -2,5 +2,6 @@ style-guide.md
 node_modules/
 dist/
 .cache/
+__pycache__/
 *.log
 .DS_Store
