@@ -15,17 +15,14 @@ document.querySelectorAll(".copy").forEach((btn) => {
       copyStatus.textContent = "Copied to clipboard";
     } catch {
       btn.textContent = "Failed";
-      copyStatus.textContent =
-        "Copy failed. The commands are selected instead.";
+      copyStatus.textContent = "Copy failed. The commands are selected instead.";
       const code = btn.parentElement.querySelector("code");
       if (code) {
         const range = document.createRange();
         range.selectNodeContents(code);
         const selection = window.getSelection();
-        if (selection) {
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
+        selection.removeAllRanges();
+        selection.addRange(range);
       }
     }
     setTimeout(() => {
@@ -38,10 +35,7 @@ document.querySelectorAll(".copy").forEach((btn) => {
 const esc = (s) =>
   String(s).replace(
     /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
 
 const fmtSize = (n) => {
@@ -75,8 +69,7 @@ let packages = [];
 const render = (list) => {
   countEl.textContent = `${list.length} of ${packages.length}`;
   if (!list.length) {
-    rowsEl.innerHTML =
-      '<tr><td colspan="5" class="state">No matching packages.</td></tr>';
+    rowsEl.innerHTML = '<tr><td colspan="5" class="state">No matching packages.</td></tr>';
     return;
   }
   rowsEl.innerHTML = list
@@ -90,7 +83,7 @@ const render = (list) => {
               <td class="desc">${esc(p.description ?? "")}</td>
               <td class="num">${fmtSize(p.size)}</td>
               <td class="num">${fmtDate(p.built)}</td>
-            </tr>`,
+            </tr>`
     )
     .join("");
 };
@@ -100,10 +93,8 @@ filterEl.addEventListener("input", () => {
   const q = filterEl.value.trim().toLowerCase();
   render(
     q
-      ? packages.filter((p) =>
-          `${p.name} ${p.description || ""}`.toLowerCase().includes(q),
-        )
-      : packages,
+      ? packages.filter((p) => `${p.name} ${p.description || ""}`.toLowerCase().includes(q))
+      : packages
   );
 });
 
@@ -128,13 +119,7 @@ const applySystemTheme = (e) => {
   themeRoot.dataset.theme = e.matches ? "dark" : "light";
   syncThemeIcon();
 };
-try {
-  mq.addEventListener("change", applySystemTheme);
-} catch {
-  try {
-    mq.addListener(applySystemTheme);
-  } catch {}
-}
+mq.addEventListener("change", applySystemTheme);
 
 themeBtn.addEventListener("click", () => {
   const next = themeRoot.dataset.theme === "dark" ? "light" : "dark";
@@ -144,7 +129,7 @@ themeBtn.addEventListener("click", () => {
 
 syncThemeIcon();
 
-fetch("packages.json", { cache: "no-store" })
+fetch("packages.json")
   .then((res) => {
     if (!res.ok) throw new Error(res.status);
     return res.json();

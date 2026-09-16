@@ -127,15 +127,6 @@ a:hover {
   color: var(--text-2);
 }
 
-:focus {
-  outline: var(--focus-width) solid var(--text);
-  outline-offset: 2px;
-}
-
-:focus:not(:focus-visible) {
-  outline: none;
-}
-
 :focus-visible {
   outline: var(--focus-width) solid var(--text);
   outline-offset: 2px;
@@ -398,14 +389,7 @@ footer p + p {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  * {
     transition: none !important;
-    animation: none !important;
-  }
-
-  html {
-    scroll-behavior: auto;
   }
 }

@@ -1,4 +1,5 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+# forge-ci: hold — stay on the 1.7.2 release line (epoch=1)
 pkgname=ttf-geist-mono
 pkgver=1.7.2
 pkgrel=1

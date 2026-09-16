@@ -15,6 +15,10 @@ Upstream probes:
   download URL; drift opens a PR that bumps the PKGBUILD (version, URL,
   checksum) instead of rebuilding the stale package
 
+Held packages: a `# forge-ci: hold` comment in a PKGBUILD skips the
+upstream probes for that package entirely, so intentionally held
+versions are never bumped or rebuilt by the scheduled check.
+
 Fail-open: whenever upstream state cannot be determined (manifest missing,
 ls-remote failure, unreadable PKGBUILD) the package is scheduled for build.
 """
@@ -30,6 +34,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -146,6 +151,10 @@ def read_sources(pkg: str) -> list[str] | None:
     return [line for line in result.stdout.splitlines() if line]
 
 
+def on_hold(pkg: str) -> bool:
+    return bool(re.search(r"(?m)^#\s*forge-ci:\s*hold\b", (PACKAGES_DIR / pkg / "PKGBUILD").read_text()))
+
+
 # ------------------------------------------------------------------ upstream
 
 
@@ -183,29 +192,44 @@ def release_archive(sources: list[str]) -> str | None:
     return None
 
 
-def ls_remote(url: str, ref: str = "HEAD") -> str | None:
-    for attempt in range(1, 4):
-        result = run(["git", "ls-remote", url, ref])
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.split()[0]
-        if attempt < 3:
+def retrying(attempt: Callable[[], tuple[bool, str | None]]) -> str | None:
+    """Call attempt() up to 3 times; (True, value) stops, (False, None) retries."""
+    for i in range(1, 4):
+        done, value = attempt()
+        if done:
+            return value
+        if i < 3:
             time.sleep(10)
     return None
+
+
+def ls_remote(url: str, ref: str = "HEAD") -> str | None:
+    def attempt() -> tuple[bool, str | None]:
+        result = run(["git", "ls-remote", url, ref])
+        if result.returncode == 0 and result.stdout.strip():
+            return True, result.stdout.split()[0]
+        return False, None
+
+    return retrying(attempt)
 
 
 def latest_tag(repo_url: str) -> str | None:
-    for attempt in range(1, 4):
+    def attempt() -> tuple[bool, str | None]:
         result = run(["git", "ls-remote", "--tags", "--refs", repo_url])
-        if result.returncode == 0:
-            tags = [line.split("refs/tags/", 1)[-1] for line in result.stdout.splitlines()]
-            tags = [t for t in tags if VERSION_TAG_RE.match(t)]
-            if tags:
-                def version_key(tag: str) -> tuple[int, ...]:
-                    return tuple(int(p) for p in re.split(r"[._-]", re.sub(r"^[vV]", "", tag)))
-                return max(tags, key=version_key)
-        if attempt < 3:
-            time.sleep(10)
-    return None
+        if result.returncode != 0:
+            return False, None
+        tags = [line.split("refs/tags/", 1)[-1] for line in result.stdout.splitlines()]
+        tags = [t for t in tags if VERSION_TAG_RE.match(t)]
+        if not tags:
+            # The probe worked; there are simply no version-like tags.
+            return True, None
+
+        def version_key(tag: str) -> tuple[int, ...]:
+            return tuple(int(p) for p in re.split(r"[._-]", re.sub(r"^[vV]", "", tag)))
+
+        return True, max(tags, key=version_key)
+
+    return retrying(attempt)
 
 
 def upstream_commit_date(git_url: str, sha: str) -> str | None:
@@ -215,13 +239,13 @@ def upstream_commit_date(git_url: str, sha: str) -> str | None:
     owner, repo = match.group(1), match.group(2)
     if repo.endswith(".git"):
         repo = repo[:-4]
-    for _ in range(3):
+
+    def attempt() -> tuple[bool, str | None]:
         data = http_json(f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}", timeout=30)
         date = (data or {}).get("commit", {}).get("committer", {}).get("date", "")
-        if date:
-            return date[:10]
-        time.sleep(10)
-    return None
+        return (True, date[:10]) if date else (False, None)
+
+    return retrying(attempt)
 
 
 def strip_v(tag: str) -> str:
@@ -281,6 +305,13 @@ def handle_release_drift(groups: dict[str, dict]) -> set[str]:
     """Open (or reuse) one PR per upstream for drifted release packages.
     Returns the packages that still need a build because no PR was possible."""
     need_build: set[str] = set()
+    # Every bump commit lands on a throwaway branch; keep the working tree
+    # anchored to the original HEAD so later groups never stack on it.
+    baseline = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+
+    def restore() -> None:
+        run(["git", "reset", "--hard", baseline])
+
     for repo_url, info in sorted(groups.items()):
         new_tag, pkgs = info["tag"], info["packages"]
         names = ", ".join(sorted(pkgs))
@@ -309,7 +340,7 @@ def handle_release_drift(groups: dict[str, dict]) -> set[str]:
                 failed = True
                 break
         if failed:
-            run(["git", "checkout", "--", "packages/"])
+            restore()
             need_build.update(pkgs)
             continue
 
@@ -327,14 +358,14 @@ def handle_release_drift(groups: dict[str, dict]) -> set[str]:
         ])
         if run(["git", "add", *(f"packages/{p}/PKGBUILD" for p in staged)]).returncode != 0:
             warn("could not stage PKGBUILD changes")
-            run(["git", "checkout", "--", "packages/"])
+            restore()
             need_build.update(pkgs)
             continue
         commit = run(["git", "-c", f"user.name={BOT_NAME}", "-c", f"user.email={BOT_EMAIL}",
                       "commit", "-m", title])
         if commit.returncode != 0:
             warn("could not commit PKGBUILD changes")
-            run(["git", "reset", "--hard"])
+            restore()
             need_build.update(pkgs)
             continue
         push = run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"])
@@ -344,16 +375,17 @@ def handle_release_drift(groups: dict[str, dict]) -> set[str]:
             push = run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"])
         if push.returncode != 0:
             warn(f"could not push branch {branch}")
-            run(["git", "reset", "--hard", "HEAD~1"])
+            restore()
             need_build.update(pkgs)
             continue
         status, _ = api("POST", f"/repos/{REPO}/pulls",
                         {"title": title, "head": branch, "base": BASE_BRANCH, "body": body})
         if status not in (200, 201):
             warn(f"PR creation for {branch} failed (HTTP {status})")
-            run(["git", "reset", "--hard", "HEAD~1"])
+            restore()
             need_build.update(pkgs)
             continue
+        restore()
         log(f"  PR    {names} (opened for {new_tag})")
     return need_build
 
@@ -368,6 +400,9 @@ def upstream_check(packages: list[str], published: dict[str, str]) -> list[str]:
         if sources is None:
             log(f"  Build {pkg} (could not read PKGBUILD)")
             build.append(pkg)
+            continue
+        if on_hold(pkg):
+            log(f"  Skip  {pkg} (forge-ci: hold)")
             continue
 
         urls = unpinned_git_urls(sources)
@@ -513,7 +548,7 @@ def main() -> None:
     else:
         check = event_name == "schedule" or (
             event_name == "workflow_dispatch"
-            and event.get("inputs", {}).get("check_upstream") is True
+            and event.get("inputs", {}).get("check_upstream") in (True, "true")
         )
         build, prune = check_path(packages, check), []
 
