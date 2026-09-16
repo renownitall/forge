@@ -236,9 +236,9 @@ def bump_pkgbuild(pkg: str, old_tag: str, new_tag: str, new_sha256: str,
     """Rewrite version, URL and checksum for a release-archived package.
     Only packages matching the trivial single-source template are bumped.
 
-    The source URL may be templated with ${pkgver}; templating is kept only
-    when bumping the version still yields the verified asset URL (upstream
-    changing tag schemes, e.g. v1.7.2 -> 1.8.0, falls back to a literal URL).
+    The URL may be templated with ${pkgver}; templating is kept only when
+    the bumped version still yields the verified asset URL, otherwise the
+    bump falls back to a literal URL.
     """
     old_version, new_version = strip_v(old_tag), strip_v(new_tag)
     path = PACKAGES_DIR / pkg / "PKGBUILD"
@@ -255,8 +255,8 @@ def bump_pkgbuild(pkg: str, old_tag: str, new_tag: str, new_sha256: str,
     if "${pkgver}" in url_line or "$pkgver" in url_line:
         if old_url.replace(old_version, new_version) != new_url:
             # Templated expansion no longer matches the verified asset URL
-            # (upstream changed tag schemes, e.g. v1.7.2 -> 1.8.0): fall back
-            # to a literal URL, preserving the optional name prefix.
+            # (upstream changed tag schemes, e.g. v1.7.2 -> 1.8.0): fall
+            # back to a literal URL, keeping the optional "name::" prefix.
             match = re.search(r'source=\("(.*)"\)', url_line)
             inner = match.group(1) if match else ""
             prefix, sep, tail = inner.partition("::")
@@ -317,7 +317,7 @@ def handle_release_drift(groups: dict[str, dict]) -> set[str]:
         names = " and ".join(staged) if len(staged) == 2 else ", ".join(staged)
         title = f"chore(packages): update {names} to {new_tag}"
         body = "\n".join([
-            "Automated upstream bump opened by the daily freshness check.",
+            "Automated bump opened by the upstream freshness check.",
             "",
             f"- Upstream tag: `{new_tag}`",
             f"- Packages: {', '.join(f'`{p}`' for p in staged)}",

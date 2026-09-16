@@ -76,10 +76,9 @@ jobs:
         env:
           PACKAGE: ${{ matrix.package }}
         run: |
-          # Enabling the cache is a pure optimization, so the match is
-          # intentionally broad: word-level search over the whole PKGBUILD,
-          # which also covers multi-line array entries (e.g. makedepends with
-          # one 'cargo'/'rust' per line) that line-anchored regexes miss.
+          # The cache is a pure optimization, so the match is intentionally
+          # broad: word-level search over the whole PKGBUILD, covering
+          # multi-line array entries that line-anchored regexes miss.
           if grep -qE '\b(cargo|rustc|rustup|rust)\b' "packages/$PACKAGE/PKGBUILD"; then
             echo "needs_rust=true" >> "$GITHUB_OUTPUT"
           else

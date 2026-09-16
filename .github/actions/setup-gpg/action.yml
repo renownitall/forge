@@ -52,8 +52,8 @@ runs:
 
         $RUN_AS "cat $PASS_FILE | $PRESET_PASSPHRASE --preset $KEYGRIP"
 
-        # 4. Fail early if the signing key is expired (or warn if it is about to be),
-        #    instead of failing obscurely during makepkg --sign / repo-add --sign.
+        # 4. Fail early on an expired signing key (warn when <30 days out),
+        #    instead of failing obscurely during makepkg/repo-add --sign.
         EXPIRY=$($RUN_AS "gpg --with-colons --list-secret-keys" | awk -F: '$1=="sec" {print $7; exit}')
         if [ -n "$EXPIRY" ]; then
           NOW=$(date +%s)
