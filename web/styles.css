@@ -38,6 +38,10 @@
     --dim: #8a8a8a;
     --line: #3a3a3a;
   }
+
+  :root:not([data-theme]) .copy .check {
+    color: #4ade80;
+  }
 }
 
 * {
@@ -189,6 +193,9 @@ code {
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -205,6 +212,20 @@ code {
 .copy:hover {
   color: var(--text);
   border-color: var(--dim);
+}
+
+.copy svg {
+  display: block;
+}
+
+.copy .check {
+  width: 12px;
+  height: 12px;
+  color: #15803d;
+}
+
+:root[data-theme="dark"] .copy .check {
+  color: #4ade80;
 }
 
 .toolbar {

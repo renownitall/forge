@@ -6,12 +6,14 @@ const COPY_TEXT = {
 
 const copyStatus = document.getElementById("copy-status");
 
+const CHECK_SVG = `<svg class="check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>`;
+
 document.querySelectorAll(".copy").forEach((btn) => {
   btn.addEventListener("click", async () => {
-    const original = btn.textContent;
+    const original = btn.innerHTML;
     try {
       await navigator.clipboard.writeText(COPY_TEXT[btn.dataset.copy]);
-      btn.textContent = "Copied";
+      btn.innerHTML = `Copied ${CHECK_SVG}`;
       copyStatus.textContent = "Copied to clipboard";
     } catch {
       btn.textContent = "Failed";
@@ -26,7 +28,7 @@ document.querySelectorAll(".copy").forEach((btn) => {
       }
     }
     setTimeout(() => {
-      btn.textContent = original;
+      btn.innerHTML = original;
       copyStatus.textContent = "";
     }, 1200);
   });
