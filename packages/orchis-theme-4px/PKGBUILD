@@ -1,0 +1,34 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+pkgname=orchis-theme-4px
+pkgver=2026.09.14
+pkgrel=1
+pkgdesc="Orchis GTK theme built with 4px rounded corners"
+arch=('any')
+url="https://github.com/vinceliuice/Orchis-theme"
+license=('GPL-3.0-or-later')
+depends=()
+makedepends=('sassc' 'git')
+optdepends=(
+  'gtk-engine-murrine: GTK2 theme support'
+  'gnome-themes-extra: GTK2 theme support'
+)
+provides=('orchis-theme')
+conflicts=('orchis-theme' 'orchis-theme-git')
+source=("${pkgname}::git+https://github.com/vinceliuice/Orchis-theme.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/${pkgname}"
+  git log -1 --format='%cd' --date=format:'%Y.%m.%d'
+}
+
+package() {
+  cd "$srcdir/${pkgname}"
+  ./install.sh \
+    --dest "${pkgdir}/usr/share/themes" \
+    --name Orchis \
+    --theme default \
+    --color light dark \
+    --size standard compact \
+    --round 4px
+}
