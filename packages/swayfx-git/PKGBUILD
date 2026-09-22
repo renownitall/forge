@@ -1,4 +1,5 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+# forge-ci: hold until upstream fixes the libinput scroll-enum build error
 _pkgname=swayfx
 pkgname=$_pkgname-git
 pkgver=r7135.8775477
