@@ -257,7 +257,7 @@ jobs:
           tar -xzOzf "${REPO_NAME}.db.tar.gz" --wildcards '*/desc' \
             | awk '
                 function emit() {
-                  if (name != "") print name "\t" base "\t" ver "\t" desc "\t" csize "\t" bdate
+                  if (name != "") print name "\t" base "\t" ver "\t" desc "\t" csize "\t" bdate "\t" arch
                 }
                 /^%FILENAME%$/  { emit(); next }
                 /^%NAME%$/      { getline; name=$0; next }
@@ -266,6 +266,7 @@ jobs:
                 /^%DESC%$/      { getline; desc=$0; next }
                 /^%CSIZE%$/     { getline; csize=$0; next }
                 /^%BUILDDATE%$/ { getline; bdate=$0; next }
+                /^%ARCH%$/      { getline; arch=$0; next }
                 END { emit() }
               ' \
             | LC_ALL=C sort \
@@ -275,7 +276,8 @@ jobs:
                 version: .[2],
                 description: .[3],
                 size: (.[4] | tonumber),
-                built: (.[5] | tonumber)
+                built: (.[5] | tonumber),
+                arch: .[6]
               }' \
             | jq -s '{packages: .}' \
             > packages.json

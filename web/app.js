@@ -62,6 +62,13 @@ const fmtDate = (ts) => {
   });
 };
 
+/* build.yml compiles every x86_64 package with -march=x86-64-v3 globally, and
+   `-any` packages ship no machine code, so the arch alone says who needs v3. */
+const v3Badge = (p) =>
+  p.arch === "x86_64"
+    ? '<span class="badge">v3<span class="sr-only"> (requires an x86-64-v3 CPU)</span></span>'
+    : "";
+
 const rowsEl = document.getElementById("rows");
 const countEl = document.getElementById("count");
 const errorEl = document.getElementById("error");
@@ -81,7 +88,7 @@ const render = (list) => {
       (p) => `<tr>
               <td class="mono">
                 ${esc(p.name ?? "—")}
-                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${encodeURIComponent(p.base ?? p.name ?? "")}/PKGBUILD">PKGBUILD</a></span>
+                <span class="pkg-links"><a href="https://github.com/renownitall/forge/blob/main/packages/${encodeURIComponent(p.base ?? p.name ?? "")}/PKGBUILD">PKGBUILD</a>${v3Badge(p)}</span>
               </td>
               <td class="mono">${esc(p.version ?? "—")}</td>
               <td class="desc">${esc(p.description ?? "")}</td>
