@@ -428,20 +428,6 @@ footer p + p {
   body {
     padding: var(--space-6);
   }
-
-  /* A floating Copy button would cover horizontally scrolling code on
-     narrow screens, so drop it into normal flow above the block. */
-  .code-block {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .copy {
-    position: static;
-    order: -1;
-    align-self: flex-end;
-    margin-bottom: var(--space-2);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
