@@ -1,5 +1,4 @@
 # Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
-# forge-ci: hold until upstream fixes the libinput scroll-enum build error
 _pkgname=swayfx
 pkgname=$_pkgname-git
 pkgver=r7135.8775477
@@ -40,13 +39,20 @@ options=(!debug)
 source=(
   "$_pkgname::git+$url.git"
   "scenefx::git+https://github.com/wlrfx/scenefx.git#commit=3606f3d3bb4bb97e13228adc5190bf57fc687c88"
+  "libinput-scroll-circular.patch"
 )
 sha256sums=('SKIP'
-  'SKIP')
+  'SKIP'
+  'cd862d1689645cb9ed54b58ff7d79b3444a33ddb057ac1b964da0568784df7e1')
 
 pkgver() {
   cd "$srcdir/$_pkgname"
   printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$srcdir/$_pkgname"
+  patch -Np1 -i "$srcdir/libinput-scroll-circular.patch"
 }
 
 build() {
