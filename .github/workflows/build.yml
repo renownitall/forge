@@ -26,8 +26,8 @@ jobs:
   changed-packages:
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # pushes bump branches for drifted release packages
-      pull-requests: write   # opens the bump PRs
+      contents: write # pushes bump branches for drifted release packages
+      pull-requests: write # opens the bump PRs
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_packages: ${{ steps.set-matrix.outputs.has_packages }}
@@ -183,7 +183,10 @@ jobs:
 
   repo:
     needs: [changed-packages, build]
-    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && needs.build.result != 'cancelled' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true') }}
+    # Manual dispatches may only need a manifest refresh (e.g. after a
+    # generator change), so the repo job also runs when no package needs
+    # a rebuild.
+    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && needs.build.result != 'cancelled' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
@@ -297,4 +300,3 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
-
