@@ -31,6 +31,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_packages: ${{ steps.set-matrix.outputs.has_packages }}
       has_removed: ${{ steps.set-matrix.outputs.has_removed }}
+      has_site: ${{ steps.set-matrix.outputs.has_site }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -182,10 +183,10 @@ jobs:
 
   repo:
     needs: [changed-packages, build]
-    # Manual dispatches may only need a manifest refresh (e.g. after a
-    # generator change), so the repo job also runs when no package needs
-    # a rebuild.
-    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch') }}
+    # Runs whenever package data or the site itself changed, so this job owns
+    # every Pages deployment. A manual dispatch also runs it to refresh the
+    # manifest (e.g. after a generator change) even without a rebuild.
+    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || needs.changed-packages.outputs.has_site == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
@@ -203,6 +204,7 @@ jobs:
           .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar python
 
       - name: Setup GPG
+        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
         uses: ./.github/actions/setup-gpg
         with:
           private-key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -221,7 +223,22 @@ jobs:
           pages-url: ${{ env.PAGES_URL }}
           repo-name: ${{ env.REPO_NAME }}
 
+      - name: Fetch published database
+        # A site-only deploy keeps the published database unchanged, so fetch
+        # it instead of regenerating it (which would also re-sign it).
+        if: ${{ needs.changed-packages.outputs.has_packages != 'true' && needs.changed-packages.outputs.has_removed != 'true' && github.event_name != 'workflow_dispatch' }}
+        run: |
+          for f in "${REPO_NAME}.db.tar.gz" "${REPO_NAME}.db" "${REPO_NAME}.files.tar.gz" "${REPO_NAME}.files" "${REPO_NAME}.db.sig" "${REPO_NAME}.files.sig" "packages.json"; do
+            echo "  Fetching $f..."
+            curl -fsSL --connect-timeout 15 --max-time 30 \
+              "${PAGES_URL}/$f" -o "repo/$f" \
+              || echo "    WARN: $f not found on Pages (first deploy?)"
+          done
+          echo "Repository contents after fetch:"
+          ls -lah repo/ || true
+
       - name: Build repository database
+        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           cd repo
 
@@ -253,6 +270,7 @@ jobs:
           ls -lah
 
       - name: Generate package manifest
+        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           cd repo
           python3 "$GITHUB_WORKSPACE/.github/scripts/pkgdb.py" manifest "${REPO_NAME}.db.tar.gz" > packages.json

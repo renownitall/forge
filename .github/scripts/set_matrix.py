@@ -2,8 +2,9 @@
 """Determine which packages the build workflow should build.
 
 Event handling:
-* push              - diff-based detection, ci(rebuild): parsing, and pruning
-                      of removed packages against the live published manifest
+* push              - diff-based detection, ci(rebuild): parsing, pruning of
+                      removed packages against the live published manifest, and
+                      detection of site-only changes that still need a deploy
 * schedule          - upstream freshness check for every package
 * workflow_dispatch - rebuild everything, or run the upstream check when the
                       `check_upstream` input is set
@@ -42,6 +43,8 @@ SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 DATE_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 GITHUB_REPO_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)")
 
+# Paths whose changes require a Pages redeploy even when no package is rebuilt.
+SITE_PREFIXES = ("web/", ".github/actions/stage-site/")
 
 def log(msg: str) -> None:
     print(msg, flush=True)
@@ -86,16 +89,24 @@ def object_exists(sha: str) -> bool:
     return run(["git", "cat-file", "-e", sha]).returncode == 0
 
 
-def diff_bases(before: str, after: str) -> list[str]:
-    result = run(["git", "diff", "--name-only", before, after, "--", "packages/"])
+def changed_files(before: str, after: str) -> list[str]:
+    result = run(["git", "diff", "--name-only", before, after])
     if result.returncode != 0:
         return []
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def package_bases(files: list[str]) -> list[str]:
     bases = set()
-    for line in result.stdout.splitlines():
+    for line in files:
         parts = line.split("/")
-        if len(parts) > 1 and parts[1]:
+        if len(parts) > 1 and parts[0] == "packages" and parts[1]:
             bases.add(parts[1])
     return sorted(bases)
+
+
+def site_changed(files: list[str]) -> bool:
+    return any(line.startswith(SITE_PREFIXES) for line in files)
 
 
 def commit_subject(sha: str) -> str:
@@ -247,21 +258,22 @@ def upstream_check(packages: list[str], published: dict[str, str]) -> list[str]:
 # -------------------------------------------------------------- event paths
 
 
-def push_path(packages: list[str], event: dict) -> tuple[list[str], list[str]]:
+def push_path(packages: list[str], event: dict) -> tuple[list[str], list[str], bool]:
     before, after = event.get("before", ""), event.get("after", "")
 
     if before == ZERO_SHA:
-        return list(packages), []
+        return list(packages), [], True
 
     if not object_exists(before):
         warn(f"before SHA {before} not found locally, attempting to fetch")
         run(["git", "fetch", "origin", before, "--depth=1"])
     if object_exists(before):
-        bases = diff_bases(before, after)
+        files = changed_files(before, after)
     else:
         warn("before SHA still not found, falling back to HEAD~1 diff")
-        bases = diff_bases("HEAD~1", "HEAD")
+        files = changed_files("HEAD~1", "HEAD")
 
+    bases = package_bases(files)
     build = [p for p in bases if p in packages]
     removed = [p for p in bases if p not in packages]
     if removed:
@@ -286,7 +298,7 @@ def push_path(packages: list[str], event: dict) -> tuple[list[str], list[str]]:
         if stale:
             log(f"Stale published packages detected: {' '.join(stale)}")
         prune = sorted(set(removed) | set(stale))
-    return build, prune
+    return build, prune, site_changed(files)
 
 
 def check_path(packages: list[str], check_upstream: bool) -> list[str]:
@@ -313,18 +325,20 @@ def main() -> None:
         set_output("has_packages", "false")
         set_output("matrix", json.dumps({"package": []}))
         set_output("has_removed", "false")
+        set_output("has_site", "false")
         return
 
     if event_name == "push":
-        build, prune = push_path(packages, event)
+        build, prune, site = push_path(packages, event)
     else:
         check = event_name == "schedule" or (
             event_name == "workflow_dispatch"
             and event.get("inputs", {}).get("check_upstream") in (True, "true")
         )
-        build, prune = check_path(packages, check), []
+        build, prune, site = check_path(packages, check), [], False
 
     build = sorted(set(build))
+    set_output("has_site", "true" if site else "false")
     if build:
         set_output("has_packages", "true")
         set_output("matrix", json.dumps({"package": build}))
