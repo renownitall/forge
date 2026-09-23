@@ -1,33 +1,26 @@
-const COPY_TEXT = {
-  key: `curl -fsSL https://renownitall.github.io/forge/signing_key.asc -o /tmp/forge-signing-key.asc\nsudo pacman-key --add /tmp/forge-signing-key.asc\nsudo pacman-key --lsign-key 45EAC3E28FC392FC4418F415C0C5B611BF77F6E5`,
-  conf: `[forge]\nSigLevel = Required DatabaseOptional\nServer = https://renownitall.github.io/forge`,
-  install: `sudo pacman -Syu\nsudo pacman -S PACKAGE_NAME`,
-};
-
 const copyStatus = document.getElementById("copy-status");
 
 const CHECK_SVG = `<svg class="check" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>`;
 
 document.querySelectorAll(".copy").forEach((btn) => {
+  const code = btn.parentElement.querySelector("code");
+  if (!code) return;
   const original = btn.innerHTML;
   let timer;
   btn.addEventListener("click", async () => {
     clearTimeout(timer);
     try {
-      await navigator.clipboard.writeText(COPY_TEXT[btn.dataset.copy]);
+      await navigator.clipboard.writeText(code.textContent);
       btn.innerHTML = `Copied ${CHECK_SVG}`;
       copyStatus.textContent = "Copied to clipboard";
     } catch {
       btn.textContent = "Failed";
       copyStatus.textContent = "Copy failed. The commands are selected instead.";
-      const code = btn.parentElement.querySelector("code");
-      if (code) {
-        const range = document.createRange();
-        range.selectNodeContents(code);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
     }
     timer = setTimeout(() => {
       btn.innerHTML = original;

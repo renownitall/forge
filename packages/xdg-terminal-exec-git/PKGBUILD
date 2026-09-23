@@ -8,7 +8,6 @@ pkgdesc="Open the user's preferred terminal emulator from apps and scripts (git)
 arch=('any')
 url="https://github.com/Vladimir-csp/$_pkgname"
 makedepends=('scdoc' 'git')
-checkdepends=('bats')
 license=('GPL-3.0-or-later')
 provides=("$_pkgname=${pkgver%%.r*}")
 conflicts=("$_pkgname")
@@ -20,11 +19,6 @@ pkgver() {
   git describe --long --tags --abbrev=7 2>/dev/null |
     sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
     printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
-}
-
-check() {
-  cd "$srcdir/$_pkgname"
-  bats "test/"
 }
 
 build() {

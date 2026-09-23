@@ -26,8 +26,7 @@ jobs:
   changed-packages:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # pushes bump branches for drifted release packages
-      pull-requests: write # opens the bump PRs
+      contents: read
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_packages: ${{ steps.set-matrix.outputs.has_packages }}
@@ -186,7 +185,7 @@ jobs:
     # Manual dispatches may only need a manifest refresh (e.g. after a
     # generator change), so the repo job also runs when no package needs
     # a rebuild.
-    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && needs.build.result != 'cancelled' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
@@ -200,8 +199,8 @@ jobs:
         run: |
           pacman-key --init
           pacman-key --populate archlinux
-          # repo-add ships with pacman; jq formats the package manifest.
-          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar jq
+          # repo-add ships with pacman; Python parses the database for the manifest.
+          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar python
 
       - name: Setup GPG
         uses: ./.github/actions/setup-gpg
@@ -256,34 +255,7 @@ jobs:
       - name: Generate package manifest
         run: |
           cd repo
-
-          tar -xzOzf "${REPO_NAME}.db.tar.gz" --wildcards '*/desc' \
-            | awk '
-                function emit() {
-                  if (name != "") print name "\t" base "\t" ver "\t" desc "\t" csize "\t" bdate "\t" arch
-                }
-                /^%FILENAME%$/  { emit(); next }
-                /^%NAME%$/      { getline; name=$0; next }
-                /^%BASE%$/      { getline; base=$0; next }
-                /^%VERSION%$/   { getline; ver=$0; next }
-                /^%DESC%$/      { getline; desc=$0; next }
-                /^%CSIZE%$/     { getline; csize=$0; next }
-                /^%BUILDDATE%$/ { getline; bdate=$0; next }
-                /^%ARCH%$/      { getline; arch=$0; next }
-                END { emit() }
-              ' \
-            | LC_ALL=C sort \
-            | jq -R 'split("\t") | {
-                name: .[0],
-                base: .[1],
-                version: .[2],
-                description: .[3],
-                size: (.[4] | tonumber),
-                built: (.[5] | tonumber),
-                arch: .[6]
-              }' \
-            | jq -s '{packages: .}' \
-            > packages.json
+          python3 "$GITHUB_WORKSPACE/.github/scripts/pkgdb.py" manifest "${REPO_NAME}.db.tar.gz" > packages.json
 
       - name: Stage site
         uses: ./.github/actions/stage-site

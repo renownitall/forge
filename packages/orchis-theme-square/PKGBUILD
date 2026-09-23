@@ -6,7 +6,6 @@ pkgdesc="Orchis GTK theme built with fully square corners"
 arch=('any')
 url="https://github.com/vinceliuice/Orchis-theme"
 license=('GPL-3.0-or-later')
-depends=()
 makedepends=('sassc' 'git')
 optdepends=(
   'gtk-engine-murrine: GTK2 theme support'

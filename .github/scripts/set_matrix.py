@@ -8,16 +8,13 @@ Event handling:
 * workflow_dispatch - rebuild everything, or run the upstream check when the
                       `check_upstream` input is set
 
-Upstream probes:
-* unpinned git source - remote HEAD vs the revision baked into the published
-  version; commit-date pkgvers are compared by date instead
-* release archive     - newest version-like upstream tag vs the tag in the
-  download URL; drift opens a PR that bumps the PKGBUILD (version, URL,
-  checksum) instead of rebuilding the stale package
+Upstream probe: compare the remote HEAD of each unpinned git source against the
+revision baked into the published version. Packages whose pkgver is a commit
+date are compared by date instead.
 
 Held packages: a `# forge-ci: hold` comment in a PKGBUILD skips the
-upstream probes for that package entirely, so intentionally held
-versions are never bumped or rebuilt by the scheduled check.
+upstream probe for that package entirely, so intentionally held
+versions are never rebuilt by the scheduled check.
 
 Fail-open: whenever upstream state cannot be determined (manifest missing,
 ls-remote failure, unreadable PKGBUILD) the package is scheduled for build.
@@ -25,14 +22,11 @@ ls-remote failure, unreadable PKGBUILD) the package is scheduled for build.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
 import subprocess
-import sys
 import time
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -40,18 +34,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES_DIR = ROOT / "packages"
 ZERO_SHA = "0" * 40
-DRY_RUN = "--dry-run" in sys.argv
 
 PAGES_URL = os.environ.get("PAGES_URL", "")
-REPO = os.environ.get("GITHUB_REPOSITORY", "")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
-BASE_BRANCH = os.environ.get("GITHUB_REF_NAME", "main")
-BOT_NAME = "github-actions[bot]"
-BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 DATE_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
-VERSION_TAG_RE = re.compile(r"^[vV]?\d+(?:[._-]\d+)*$")
 GITHUB_REPO_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)")
 
 
@@ -83,30 +71,6 @@ def http_json(url: str, timeout: int = 60) -> dict | None:
             return json.load(resp)
     except Exception:
         return None
-
-
-def http_bytes(url: str, timeout: int = 300) -> bytes | None:
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "forge-ci"}), timeout=timeout) as resp:
-            return resp.read()
-    except Exception:
-        return None
-
-
-def api(method: str, path: str, body: dict | None = None) -> tuple[int, object]:
-    headers = {"User-Agent": "forge-ci", "Accept": "application/vnd.github+json"}
-    if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(f"https://api.github.com{path}", data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            payload = resp.read()
-            return resp.status, json.loads(payload) if payload else None
-    except urllib.error.HTTPError as err:
-        return err.code, None
-    except Exception:
-        return 0, None
 
 
 # ---------------------------------------------------------------- repo state
@@ -185,13 +149,6 @@ def unpinned_git_urls(sources: list[str]) -> list[str]:
     return urls
 
 
-def release_archive(sources: list[str]) -> str | None:
-    for entry in sources:
-        if "/releases/download/" in entry:
-            return entry.split("::", 1)[-1]
-    return None
-
-
 def retrying(attempt: Callable[[], tuple[bool, str | None]]) -> str | None:
     """Call attempt() up to 3 times; (True, value) stops, (False, None) retries."""
     for i in range(1, 4):
@@ -213,25 +170,6 @@ def ls_remote(url: str, ref: str = "HEAD") -> str | None:
     return retrying(attempt)
 
 
-def latest_tag(repo_url: str) -> str | None:
-    def attempt() -> tuple[bool, str | None]:
-        result = run(["git", "ls-remote", "--tags", "--refs", repo_url])
-        if result.returncode != 0:
-            return False, None
-        tags = [line.split("refs/tags/", 1)[-1] for line in result.stdout.splitlines()]
-        tags = [t for t in tags if VERSION_TAG_RE.match(t)]
-        if not tags:
-            # The probe worked; there are simply no version-like tags.
-            return True, None
-
-        def version_key(tag: str) -> tuple[int, ...]:
-            return tuple(int(p) for p in re.split(r"[._-]", re.sub(r"^[vV]", "", tag)))
-
-        return True, max(tags, key=version_key)
-
-    return retrying(attempt)
-
-
 def upstream_commit_date(git_url: str, sha: str) -> str | None:
     match = GITHUB_REPO_RE.match(git_url)
     if not match:
@@ -248,228 +186,62 @@ def upstream_commit_date(git_url: str, sha: str) -> str | None:
     return retrying(attempt)
 
 
-def strip_v(tag: str) -> str:
-    return tag[1:] if tag[:1] in ("v", "V") else tag
-
-
-# -------------------------------------------------------------- release PRs
-
-
-def bump_pkgbuild(pkg: str, old_tag: str, new_tag: str, new_sha256: str,
-                  old_url: str, new_url: str) -> bool:
-    """Rewrite version, URL and checksum for a release-archived package.
-    Only packages matching the trivial single-source template are bumped.
-
-    The URL may be templated with ${pkgver}; templating is kept only when
-    the bumped version still yields the verified asset URL, otherwise the
-    bump falls back to a literal URL.
-    """
-    old_version, new_version = strip_v(old_tag), strip_v(new_tag)
-    path = PACKAGES_DIR / pkg / "PKGBUILD"
-    text = path.read_text()
-    sums = re.search(r"(?m)^sha256sums=.*$", text)
-    hashes = re.findall(r"\b[0-9a-fA-F]{64}\b", sums.group(0)) if sums else []
-    url_line = next((line for line in text.splitlines() if "/releases/download/" in line), None)
-    if (
-        url_line is None
-        or not re.search(rf"(?m)^pkgver={re.escape(old_version)}$", text)
-        or len(hashes) != 1
-    ):
-        return False
-    if "${pkgver}" in url_line or "$pkgver" in url_line:
-        if old_url.replace(old_version, new_version) != new_url:
-            # Templated expansion no longer matches the verified asset URL
-            # (upstream changed tag schemes, e.g. v1.7.2 -> 1.8.0): fall
-            # back to a literal URL, keeping the optional "name::" prefix.
-            match = re.search(r'source=\("(.*)"\)', url_line)
-            inner = match.group(1) if match else ""
-            prefix, sep, tail = inner.partition("::")
-            new_inner = f"{prefix}::{new_url}" if sep and "://" in tail else new_url
-            text = text.replace(url_line, f'source=("{new_inner}")')
-    elif old_tag in url_line:
-        text = text.replace(url_line, url_line.replace(old_tag, new_tag))
-    else:
-        return False
-    text = re.sub(rf"(?m)^pkgver={re.escape(old_version)}$", f"pkgver={new_version}", text, count=1)
-    text = text.replace(hashes[0], new_sha256)
-    path.write_text(text)
-    return True
-
-
-def pr_open(branch: str) -> bool:
-    status, prs = api("GET", f"/repos/{REPO}/pulls?head={REPO}:{branch}&state=open")
-    return status == 200 and bool(prs)
-
-
-def handle_release_drift(groups: dict[str, dict]) -> set[str]:
-    """Open (or reuse) one PR per upstream for drifted release packages.
-    Returns the packages that still need a build because no PR was possible."""
-    need_build: set[str] = set()
-    # Every bump commit lands on a throwaway branch; keep the working tree
-    # anchored to the original HEAD so later groups never stack on it.
-    baseline = run(["git", "rev-parse", "HEAD"]).stdout.strip()
-
-    def restore() -> None:
-        run(["git", "reset", "--hard", baseline])
-
-    for repo_url, info in sorted(groups.items()):
-        new_tag, pkgs = info["tag"], info["packages"]
-        names = ", ".join(sorted(pkgs))
-        slug = repo_url.split("https://github.com/", 1)[-1].strip("/").replace("/", "-")
-        branch = f"bump/{slug}-{strip_v(new_tag)}"
-
-        if pr_open(branch):
-            log(f"  PR    {names} (already open for {new_tag})")
-            continue
-        if DRY_RUN:
-            log(f"  PR    {names} (dry run: would open a PR bumping to {new_tag})")
-            continue
-
-        failed = False
-        for pkg in sorted(pkgs):
-            archive_url, old_tag = pkgs[pkg]
-            new_url = archive_url.replace(old_tag, new_tag)
-            blob = http_bytes(new_url)
-            if blob is None:
-                warn(f"{pkg}: release asset for {new_tag} unreachable, cannot open a PR")
-                failed = True
-                break
-            if not bump_pkgbuild(pkg, old_tag, new_tag, hashlib.sha256(blob).hexdigest(),
-                                 archive_url, new_url):
-                warn(f"{pkg}: PKGBUILD does not match the release template, cannot open a PR")
-                failed = True
-                break
-        if failed:
-            restore()
-            need_build.update(pkgs)
-            continue
-
-        staged = sorted(pkgs)
-        names = " and ".join(staged) if len(staged) == 2 else ", ".join(staged)
-        title = f"chore(packages): update {names} to {new_tag}"
-        body = "\n".join([
-            "Automated bump opened by the upstream freshness check.",
-            "",
-            f"- Upstream tag: `{new_tag}`",
-            f"- Packages: {', '.join(f'`{p}`' for p in staged)}",
-            "- `sha256sums` recomputed from the release artifact",
-            "",
-            "Merging this PR triggers the regular build and publish pipeline.",
-        ])
-        if run(["git", "add", *(f"packages/{p}/PKGBUILD" for p in staged)]).returncode != 0:
-            warn("could not stage PKGBUILD changes")
-            restore()
-            need_build.update(pkgs)
-            continue
-        commit = run(["git", "-c", f"user.name={BOT_NAME}", "-c", f"user.email={BOT_EMAIL}",
-                      "commit", "-m", title])
-        if commit.returncode != 0:
-            warn("could not commit PKGBUILD changes")
-            restore()
-            need_build.update(pkgs)
-            continue
-        push = run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"])
-        if push.returncode != 0:
-            # A branch may linger from an aborted run; replace it and retry.
-            run(["git", "push", "origin", f":refs/heads/{branch}"])
-            push = run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"])
-        if push.returncode != 0:
-            warn(f"could not push branch {branch}")
-            restore()
-            need_build.update(pkgs)
-            continue
-        status, _ = api("POST", f"/repos/{REPO}/pulls",
-                        {"title": title, "head": branch, "base": BASE_BRANCH, "body": body})
-        if status not in (200, 201):
-            warn(f"PR creation for {branch} failed (HTTP {status})")
-            restore()
-            need_build.update(pkgs)
-            continue
-        restore()
-        log(f"  PR    {names} (opened for {new_tag})")
-    return need_build
-
-
 def upstream_check(packages: list[str], published: dict[str, str]) -> list[str]:
     build: list[str] = []
-    drift: dict[str, dict] = {}
 
     for pkg in packages:
         sha, date = published_revision(published.get(pkg))
+        if on_hold(pkg):
+            log(f"  Skip  {pkg} (forge-ci: hold)")
+            continue
         sources = read_sources(pkg)
         if sources is None:
             log(f"  Build {pkg} (could not read PKGBUILD)")
             build.append(pkg)
             continue
-        if on_hold(pkg):
-            log(f"  Skip  {pkg} (forge-ci: hold)")
-            continue
 
         urls = unpinned_git_urls(sources)
-        if len(urls) > 1:
+        if len(urls) != 1:
             log(f"  Build {pkg} (expected 1 unpinned git source, found {len(urls)})")
             build.append(pkg)
             continue
 
-        if len(urls) == 1:
-            url = urls[0]
-            ref = "HEAD"
-            if "#branch=" in url:
-                ref = "refs/heads/" + url.split("#branch=", 1)[1]
-            clean_url = url.split("#", 1)[0]
+        url = urls[0]
+        ref = "HEAD"
+        if "#branch=" in url:
+            ref = "refs/heads/" + url.split("#branch=", 1)[1]
+        clean_url = url.split("#", 1)[0]
 
-            remote = ls_remote(clean_url, ref)
-            if remote is None:
-                log(f"  Build {pkg} (ls-remote failed after 3 attempts)")
+        remote = ls_remote(clean_url, ref)
+        if remote is None:
+            log(f"  Build {pkg} (ls-remote failed after 3 attempts)")
+            build.append(pkg)
+            continue
+        if sha:
+            if remote.startswith(sha):
+                log(f"  Skip  {pkg} (upstream {remote[:7]} matches published {sha})")
+            else:
+                log(f"  Build {pkg} (upstream {remote[:7]} != published {sha})")
+                build.append(pkg)
+        elif date:
+            upstream = upstream_commit_date(clean_url, remote)
+            if upstream is None:
+                log(f"  Build {pkg} (could not resolve upstream commit date)")
                 build.append(pkg)
                 continue
-            if sha:
-                if remote.startswith(sha):
-                    log(f"  Skip  {pkg} (upstream {remote[:7]} matches published {sha})")
-                else:
-                    log(f"  Build {pkg} (upstream {remote[:7]} != published {sha})")
-                    build.append(pkg)
-            elif date:
-                upstream = upstream_commit_date(clean_url, remote)
-                if upstream is None:
-                    log(f"  Build {pkg} (could not resolve upstream commit date)")
-                    build.append(pkg)
-                    continue
-                upstream = upstream.replace("-", ".")
-                # A newer upstream date means upstream moved; equal or older
-                # means the published build is already current.
-                if upstream > date:
-                    log(f"  Build {pkg} (upstream {upstream} != published {date})")
-                    build.append(pkg)
-                else:
-                    log(f"  Skip  {pkg} (upstream {upstream} not past published {date})")
-            else:
-                log(f"  Build {pkg} (not published or no comparable revision in '{published.get(pkg, '')}')")
+            upstream = upstream.replace("-", ".")
+            # A newer upstream date means upstream moved; equal or older
+            # means the published build is already current.
+            if upstream > date:
+                log(f"  Build {pkg} (upstream {upstream} != published {date})")
                 build.append(pkg)
-            continue
-
-        archive = release_archive(sources)
-        if archive is None:
-            log(f"  Build {pkg} (no git source or release archive to probe)")
+            else:
+                log(f"  Skip  {pkg} (upstream {upstream} not past published {date})")
+        else:
+            log(f"  Build {pkg} (not published or no comparable revision in '{published.get(pkg, '')}')")
             build.append(pkg)
-            continue
-        old_tag = archive.split("/releases/download/", 1)[1].split("/", 1)[0]
-        repo_url = archive.split("/releases/", 1)[0]
 
-        new_tag = latest_tag(repo_url)
-        if new_tag is None:
-            log(f"  Build {pkg} (ls-remote tags failed after 3 attempts)")
-            build.append(pkg)
-            continue
-        if strip_v(new_tag) == strip_v(old_tag):
-            log(f"  Skip  {pkg} (latest tag {new_tag} matches published {old_tag})")
-            continue
-        log(f"  Bump  {pkg} (latest tag {new_tag} != published {old_tag})")
-        group = drift.setdefault(repo_url, {"tag": new_tag, "packages": {}})
-        group["packages"][pkg] = (archive, old_tag)
-
-    need_build = handle_release_drift(drift) if drift else set()
-    return sorted(set(build) | need_build)
+    return sorted(set(build))
 
 
 # -------------------------------------------------------------- event paths
