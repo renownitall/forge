@@ -4,3 +4,7 @@ packages/*/*.pkg.tar*
 packages/*/*.log
 repo/
 artifact-stage/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+staging/

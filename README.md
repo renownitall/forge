@@ -2,7 +2,7 @@
 
 Hi. This is my custom Arch Linux package repository.
 
-The packages are built, signed with _GNU Privacy Guard (GPG)_, and published automatically. They're hosted on GitHub Pages, and every push to `main` and every scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, so versions advance only when upstream has actually moved. If you run Arch Linux, you can install these packages with `pacman`.
+The packages are built, signed with _GNU Privacy Guard (GPG)_, and published automatically. They're hosted on GitHub Pages. Every push to `main` rebuilds the packages it changed, while a scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, and versions advance only when upstream has actually moved. If you run Arch Linux, you can install these packages with `pacman`.
 
 > [!CAUTION]
 > Packages that compile to native machine code target `x86-64-v3` and need a compatible CPU. Prebuilt binaries, Python packages, scripts, and themes run on any `x86_64` machine.
@@ -51,21 +51,23 @@ There are eight packages, each under `packages/`:
 
 ## Development
 
-Run `make check` before committing. The check needs `shfmt` and Node on your machine. To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The package stays out of the next build and leaves the repository on the next publish.
+Run `make check` before committing. The check needs `shfmt`, Node, Python, and `uv` on your machine. Pushes that touch only documentation or tooling files build nothing, and a manual dispatch from the Actions tab rebuilds every package.
+
+To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The package stays out of the next build and leaves the repository on the next publish.
 
 ## Build pipeline
 
-Each package builds in its own job, and nothing publishes unless every job succeeds.
+Each push rebuilds only the packages it changed, while the daily run or a manual dispatch rebuilds everything. Every package builds in its own job, packages that are not rebuilt keep their published copy, and nothing publishes unless every job succeeds.
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TD
     trigger["push to main, daily at 04:37 UTC, or manual dispatch from main"] --> discover["`**discover**
-lists packages/ and skips HOLD files`"]
+picks what to rebuild and skips HOLD files`"]
     discover --> build["`**build**
 runs makepkg with an edited makepkg.conf for each package`"]
     build --> repo["`**repo**
-runs repo-add --sign over every artifact`"]
+runs repo-add --sign over new and fetched packages`"]
     repo --> deploy["`**deploy**
 publishes forge.db, packages, and signing_key.asc to GitHub Pages`"]
 ```

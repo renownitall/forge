@@ -9,6 +9,7 @@ on:
 
 env:
   REPO_NAME: forge
+  PAGES_BASE: https://renownitall.github.io/forge
 
 permissions: {}
 
@@ -23,30 +24,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Every run rebuilds everything. Git packages recompute pkgver() during the
-  # build, so there is deliberately no upstream probe. The database is rebuilt
-  # from scratch, and a package leaves the repo by leaving packages/ or by
-  # gaining a HOLD file.
+  # A push rebuilds only what its diff touched. The daily run and a manual
+  # dispatch rebuild everything, which keeps git packages moving with upstream
+  # without an upstream probe. The database is rebuilt from scratch, and a
+  # package leaves the repo by leaving packages/ or by gaining a HOLD file.
   discover:
     runs-on: ubuntu-latest
-    # workflow_dispatch can start from any ref, so gate publishing on main.
+    # Gate publishing on main because workflow_dispatch can start from any ref.
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
     outputs:
-      matrix: ${{ steps.list.outputs.matrix }}
-      has_packages: ${{ steps.list.outputs.has_packages }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      has_packages: ${{ steps.select.outputs.has_packages }}
+      has_removals: ${{ steps.select.outputs.has_removals }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Diffing against the previous commit needs the full history.
+          fetch-depth: 0
 
-      - name: List packages
-        id: list
-        run: .github/scripts/list-packages.sh
+      - name: Select packages
+        id: select
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: .github/scripts/select-packages.py
+
+      - name: Upload published copies
+        if: steps.select.outputs.staged == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-copies
+          path: staging/pkg.tar
+          if-no-files-found: error
+          retention-days: 3
 
   build:
     needs: discover
-    # Skips when every package is held, so HOLD can pause the whole repo.
+    # Skips when the run selects no packages, which covers docs-only pushes
+    # and a full HOLD pause.
     if: needs.discover.outputs.has_packages == 'true'
     runs-on: ubuntu-latest
     container:
@@ -162,11 +179,12 @@ jobs:
         run: paccache -r -u -k 2 || true
 
   # Nothing is installed in this job. The pinned archlinux:base image already
-  # has gpg, and repo-add --sign works without pacman-key. A failed or skipped
-  # `needs` job skips this one, so a failure anywhere publishes nothing. The
-  # next run rebuilds everything anyway.
+  # has gpg, and repo-add --sign works without pacman-key. The always() guard
+  # lets a run with no builds publish a removal, while a failed build blocks
+  # the publish entirely.
   repo:
     needs: [discover, build]
+    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && (needs.discover.outputs.has_packages == 'true' || needs.discover.outputs.has_removals == 'true') }}
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
