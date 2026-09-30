@@ -4,49 +4,69 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      check_upstream:
-        description: "Only rebuild packages whose upstream moved past what is published"
-        type: boolean
-        default: false
   schedule:
     - cron: "37 4 * * *"
 
 env:
   REPO_NAME: forge
-  PAGES_URL: https://renownitall.github.io/forge
 
 permissions: {}
+
+# `shell: bash` gives every `run:` step `-o pipefail`. The default
+# `bash -e {0}` drops it, so a mid-pipeline failure goes unnoticed.
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  changed-packages:
+  # Every run rebuilds everything. Git packages recompute pkgver() during the
+  # build, so there is deliberately no upstream probe. The database is rebuilt
+  # from scratch, and a package leaves the repo by leaving packages/.
+  discover:
     runs-on: ubuntu-latest
+    # workflow_dispatch can start from any ref, so gate publishing on main.
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      has_packages: ${{ steps.set-matrix.outputs.has_packages }}
-      has_removed: ${{ steps.set-matrix.outputs.has_removed }}
-      has_site: ${{ steps.set-matrix.outputs.has_site }}
+      matrix: ${{ steps.list.outputs.matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
-      - name: Determine changed packages
-        id: set-matrix
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/set_matrix.py
+      - name: List packages
+        id: list
+        run: |
+          # Anything echoed inside $() is captured into the variable, not
+          # printed, so notices stay outside substitutions.
+          list=""
+          for dir in packages/*/; do
+            name=$(basename "$dir")
+            if [ -f "$dir/PKGBUILD" ] && [ ! -f "$dir/HOLD" ]; then
+              list+="$name"$'\n'
+            fi
+          done
+          matrix=$(printf '%s' "$list" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          count=$(jq 'length' <<<"$matrix")
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No buildable packages found under packages/"
+            exit 1
+          fi
+          for dir in packages/*/HOLD; do
+            [ -e "$dir" ] || continue
+            echo "::notice title=Held package::$(basename "$(dirname "$dir")") is held ($dir)"
+          done
+
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Packages to build ($count): $matrix"
 
   build:
-    needs: changed-packages
-    if: needs.changed-packages.outputs.has_packages == 'true'
+    needs: discover
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel@sha256:aecf5b39bd3139a951090dfb3d940f9317e4c5fca038c65fb49ac03910f7133e
@@ -55,7 +75,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.changed-packages.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
@@ -76,9 +96,8 @@ jobs:
         env:
           PACKAGE: ${{ matrix.package }}
         run: |
-          # The cache is a pure optimization, so the match is intentionally
-          # broad: word-level search over the whole PKGBUILD, covering
-          # multi-line array entries that line-anchored regexes miss.
+          # The cache is a pure optimization, so the match stays broad over
+          # the whole file to cover multi-line array entries.
           if grep -qE '\b(cargo|rustc|rustup|rust)\b' "packages/$PACKAGE/PKGBUILD"; then
             echo "needs_rust=true" >> "$GITHUB_OUTPUT"
           else
@@ -125,9 +144,36 @@ jobs:
           cat >> /etc/makepkg.conf <<'EOF'
           RUSTFLAGS="-Cforce-frame-pointers=yes -Copt-level=3 -Ctarget-cpu=x86-64-v3 -Clink-arg=-z -Clink-arg=pack-relative-relocs -Ccodegen-units=1 -Clink-arg=-fuse-ld=mold"
           export CARGO_PROFILE_RELEASE_LTO=fat
+          export GOAMD64=v3
           EOF
 
-          sed -i "s/COMPRESSZST=(zstd -c -z -q -)/COMPRESSZST=(zstd -c -z -q --threads=0 -19 -)/" /etc/makepkg.conf
+          sed -i 's/COMPRESSZST=(zstd -c -T0 -)/COMPRESSZST=(zstd -c -T0 -q -19 -)/' /etc/makepkg.conf
+
+          # Every mutation above has to have applied. A silent no-op here
+          # publishes packages with the wrong build options, which already
+          # happened when the compression sed stopped matching Arch's line.
+          assert() {
+            grep -qE -- "$1" /etc/makepkg.conf || { echo "::error::makepkg.conf: expected but missing: $1"; exit 1; }
+          }
+          reject() {
+            if grep -qE -- "$1" /etc/makepkg.conf; then
+              echo "::error::makepkg.conf: unexpected state still present: $1"
+              exit 1
+            fi
+          }
+
+          assert '^CFLAGS=.*-march=x86-64-v3'
+          reject '^CFLAGS=.*-mtune=generic'
+          assert '^OPTIONS=.*\blto\b'
+          reject '^OPTIONS=.*!lto'
+          assert '^OPTIONS=.*!debug'
+          assert -- '-mpclmul'
+          assert -- '-falign-functions=32'
+          assert '^MAKEFLAGS="-j[0-9]+"'
+          assert '^COMPRESSZST=.*-19'
+          assert '^RUSTFLAGS="-Cforce-frame-pointers=yes'
+          assert '^export CARGO_PROFILE_RELEASE_LTO=fat'
+          assert '^export GOAMD64=v3'
 
       - name: Setup GPG
         uses: ./.github/actions/setup-gpg
@@ -176,17 +222,15 @@ jobs:
 
       - name: Clean pacman cache
         if: always()
-        # Keep the last 2 versions per package: the pacman cache is restored
-        # by actions/cache on subsequent runs, and -k 0 would wipe it before
-        # the save step, making the cache permanently empty.
+        # Keep 2 versions. actions/cache restores this directory on later
+        # runs, and -k 0 would wipe it before the save step, leaving the
+        # cache permanently empty.
         run: paccache -r -u -k 2 || true
 
+  # A failed or skipped `needs` job skips this one, so a failure anywhere
+  # publishes nothing. The next run rebuilds everything anyway.
   repo:
-    needs: [changed-packages, build]
-    # Runs whenever package data or the site itself changed, so this job owns
-    # every Pages deployment. A manual dispatch also runs it to refresh the
-    # manifest (e.g. after a generator change) even without a rebuild.
-    if: ${{ always() && !cancelled() && needs.build.result != 'failure' && (needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || needs.changed-packages.outputs.has_site == 'true' || github.event_name == 'workflow_dispatch') }}
+    needs: [discover, build]
     runs-on: ubuntu-latest
     container:
       image: archlinux:base@sha256:bf88f8143c3ef21b14d0ebb8140099f0bf75ecfc3699f357ff92317a73f5aba9
@@ -196,68 +240,62 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install repo tools
-        run: |
-          pacman-key --init
-          pacman-key --populate archlinux
-          # repo-add ships with pacman; Python parses the database for the manifest.
-          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar python
-
       - name: Setup GPG
-        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
         uses: ./.github/actions/setup-gpg
         with:
           private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
           user: root
 
+      - name: Verify the signing key matches what users are told to trust
+        run: |
+          set -euo pipefail
+          secret_fp=$(gpg --with-colons --list-secret-keys | awk -F: '$1=="fpr" {print $10; exit}')
+          show_home=$(mktemp -d)
+          published_fp=$(GNUPGHOME="$show_home" gpg --with-colons --show-keys signing_key.asc 2>/dev/null | awk -F: '$1=="fpr" {print $10; exit}')
+          if [ "$secret_fp" != "$published_fp" ]; then
+            echo "::error::CI signs with $secret_fp but signing_key.asc is $published_fp. Republish the key"
+            exit 1
+          fi
+          if ! grep -q "$secret_fp" README.md; then
+            echo "::error::README.md does not tell users to lsign the signing key ($secret_fp)"
+            exit 1
+          fi
+          echo "Signing key $secret_fp: matches signing_key.asc and README.md"
+
       - name: Download all package artifacts
-        if: needs.changed-packages.outputs.has_packages == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts/
 
-      - name: Fetch existing repository packages
-        uses: ./.github/actions/fetch-repo
-        with:
-          pages-url: ${{ env.PAGES_URL }}
-          repo-name: ${{ env.REPO_NAME }}
-
-      - name: Fetch published database
-        # A site-only deploy keeps the published database unchanged, so fetch
-        # it instead of regenerating it (which would also re-sign it).
-        if: ${{ needs.changed-packages.outputs.has_packages != 'true' && needs.changed-packages.outputs.has_removed != 'true' && github.event_name != 'workflow_dispatch' }}
-        run: |
-          for f in "${REPO_NAME}.db.tar.gz" "${REPO_NAME}.db" "${REPO_NAME}.files.tar.gz" "${REPO_NAME}.files" "${REPO_NAME}.db.sig" "${REPO_NAME}.files.sig" "packages.json"; do
-            echo "  Fetching $f..."
-            curl -fsSL --connect-timeout 15 --max-time 30 \
-              "${PAGES_URL}/$f" -o "repo/$f" \
-              || echo "    WARN: $f not found on Pages (first deploy?)"
-          done
-          echo "Repository contents after fetch:"
-          ls -lah repo/ || true
-
       - name: Build repository database
-        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
+          set -euo pipefail
+          mkdir -p repo
+          cp signing_key.asc repo/
+          find artifacts/ -name pkg.tar -exec tar -xf {} -C repo \;
+
           cd repo
-
-          if [ -d ../artifacts ]; then
-            find ../artifacts/ -name pkg.tar -exec tar -xf {} \;
-            find ../artifacts/ -name "*.pkg.tar.zst"     -exec mv {} . \;
-            find ../artifacts/ -name "*.pkg.tar.zst.sig" -exec mv {} . \;
-          fi
-
-          pkg_count=$(ls -1 *.pkg.tar.zst 2>/dev/null | wc -l)
-          echo "Found ${pkg_count} package(s) total (existing + new):"
-          ls -1 *.pkg.tar.zst | sed 's/^/  /'
-          if [ "$pkg_count" -eq 0 ]; then
+          shopt -s nullglob
+          pkgs=(*.pkg.tar.zst)
+          sigs=(*.pkg.tar.zst.sig)
+          if [ "${#pkgs[@]}" -eq 0 ]; then
             echo "::error::No packages found to build repository"
             exit 1
           fi
+          # Under SigLevel = Required a package without a signature cannot be
+          # installed, so refuse to publish one.
+          if [ "${#sigs[@]}" -ne "${#pkgs[@]}" ]; then
+            echo "::error::Signatures (${#sigs[@]}) do not match packages (${#pkgs[@]}), refusing to publish"
+            exit 1
+          fi
+          echo "Publishing packages (${#pkgs[@]}):"
+          printf '  %s\n' "${pkgs[@]}"
 
-          repo-add --remove --sign "${REPO_NAME}.db.tar.gz" *.pkg.tar.zst
+          repo-add --sign "${REPO_NAME}.db.tar.gz" "${pkgs[@]}"
 
+          # repo-add leaves the short names as symlinks. Pages preserves
+          # them as symlink entries, so turn them into real files.
           for link in "${REPO_NAME}.db" "${REPO_NAME}.db.sig" "${REPO_NAME}.files" "${REPO_NAME}.files.sig"; do
             if [ -L "$link" ]; then
               target=$(readlink "$link")
@@ -269,15 +307,6 @@ jobs:
           echo "Repository contents:"
           ls -lah
 
-      - name: Generate package manifest
-        if: ${{ needs.changed-packages.outputs.has_packages == 'true' || needs.changed-packages.outputs.has_removed == 'true' || github.event_name == 'workflow_dispatch' }}
-        run: |
-          cd repo
-          python3 "$GITHUB_WORKSPACE/.github/scripts/pkgdb.py" manifest "${REPO_NAME}.db.tar.gz" > packages.json
-
-      - name: Stage site
-        uses: ./.github/actions/stage-site
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -285,7 +314,6 @@ jobs:
 
   deploy:
     needs: repo
-    if: ${{ !cancelled() && !failure() && needs.repo.result == 'success' }}
     permissions:
       pages: write
       id-token: write

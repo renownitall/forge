@@ -8,7 +8,7 @@ inputs:
     description: "GPG Passphrase"
     required: true
   user:
-    description: "User to run GPG as (e.g., builder or root)"
+    description: "User account GPG runs as, such as builder or root"
     default: "root"
 runs:
   using: "composite"
@@ -38,27 +38,24 @@ runs:
           HOME_DIR="$HOME"
         fi
 
-        # 1. Configure agent
         $RUN_AS "mkdir -p $HOME_DIR/.gnupg && chmod 700 $HOME_DIR/.gnupg"
         $RUN_AS "echo 'allow-preset-passphrase' > $HOME_DIR/.gnupg/gpg-agent.conf"
 
-        # 2. Import key and reload agent
         $RUN_AS "gpg --batch --import $KEY_FILE"
         $RUN_AS "gpg-connect-agent --verbose reloadagent /bye"
 
-        # 3. Preset passphrase dynamically finding the libexec dir
         KEYGRIP=$($RUN_AS "gpg --list-secret-keys --with-keygrip --with-colons" | awk -F: '/^grp/ {print $10; exit}')
         PRESET_PASSPHRASE=$($RUN_AS "gpgconf --list-dirs libexecdir")/gpg-preset-passphrase
 
         $RUN_AS "cat $PASS_FILE | $PRESET_PASSPHRASE --preset $KEYGRIP"
 
-        # 4. Fail early on an expired signing key (warn when <30 days out),
-        #    instead of failing obscurely during makepkg/repo-add --sign.
+        # Fail early on an expired signing key (warn when less than 30 days
+        # out) instead of failing obscurely during makepkg or repo-add --sign.
         EXPIRY=$($RUN_AS "gpg --with-colons --list-secret-keys" | awk -F: '$1=="sec" {print $7; exit}')
         if [ -n "$EXPIRY" ]; then
           NOW=$(date +%s)
           if [ "$EXPIRY" -lt "$NOW" ]; then
-            echo "::error::GPG signing key expired on $(date -u -d "@$EXPIRY" '+%Y-%m-%d'); rotate the key and update the GPG_PRIVATE_KEY/GPG_PASSPHRASE secrets"
+            echo "::error::GPG signing key expired on $(date -u -d "@$EXPIRY" '+%Y-%m-%d'). Rotate the key and update the GPG_PRIVATE_KEY/GPG_PASSPHRASE secrets"
             exit 1
           fi
           DAYS=$(( (EXPIRY - NOW) / 86400 ))

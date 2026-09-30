@@ -1,1 +1,6 @@
-__pycache__/
+packages/*/src/
+packages/*/pkg/
+packages/*/*.pkg.tar*
+packages/*/*.log
+repo/
+artifact-stage/

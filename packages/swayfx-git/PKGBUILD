@@ -68,7 +68,7 @@ build() {
   # during the swayfx build (it would pass unsupported options to scenefx).
   rm -rf subprojects build-scenefx
 
-  # Build swayfx, finding scenefx via PKG_CONFIG_PATH and include paths.
+  # Point the build at the locally built scenefx.
   export PKG_CONFIG_PATH="$PWD/install-scenefx/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
   export CPATH="$PWD/install-scenefx/usr/include/scenefx-0.5:$CPATH"
   export LIBRARY_PATH="$PWD/install-scenefx/usr/lib:$LIBRARY_PATH"
