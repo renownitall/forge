@@ -4,8 +4,18 @@ Hi. This is my custom Arch Linux package repository.
 
 The packages are built, signed with _GNU Privacy Guard (GPG)_, and published automatically. They're hosted on GitHub Pages, and every push to `main` and every scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, so versions advance only when upstream has actually moved. If you run Arch Linux, you can install these packages with `pacman`.
 
+The build pipeline runs as follows:
+
+```mermaid
+flowchart TD
+    trigger["push to main, daily at 04:37 UTC, or manual dispatch from main"] --> discover["discover lists packages/ and skips HOLD files"]
+    discover --> build["build runs makepkg with an edited makepkg.conf for each package"]
+    build --> repo["repo runs repo-add --sign over every artifact"]
+    repo --> deploy["deploy publishes forge.db, packages, and signing_key.asc to GitHub Pages"]
+```
+
 > [!CAUTION]
-> Every package this repo compiles from source targets `x86-64-v3` and needs a compatible CPU. Prebuilt packages, scripts, and themes run on any `x86_64` machine.
+> Packages that compile to native machine code target `x86-64-v3` and need a compatible CPU. Prebuilt binaries, Python packages, scripts, and themes run on any `x86_64` machine.
 
 ## Setup
 
@@ -34,9 +44,24 @@ The packages are built, signed with _GNU Privacy Guard (GPG)_, and published aut
 
 `pacman -Sl forge` lists everything that's published.
 
+## Packages
+
+There are eight packages, each under `packages/`:
+
+| Package               | Description                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| calpdf-git            | PDF toolkit to run alongside Calibre: download and swap covers, shrink PDFs, and export or rewrite bookmarks (git) |
+| exercism-bin          | Download exercises from exercism.org, work on them locally, and submit your solutions (prebuilt binary)            |
+| lutgen-cli-git        | Recolor images to match a color theme such as Catppuccin, Gruvbox, or Nord (git)                                   |
+| orchis-theme-4px      | Orchis GTK theme built with 4px rounded corners                                                                    |
+| orchis-theme-square   | Orchis GTK theme built with fully square corners                                                                   |
+| swayfx-git            | Sway compositor with shadows, blur, and rounded corners, built against wlroots 0.20 (git)                          |
+| wayfreeze-git         | Freeze the screen to draw a selection and take a screenshot without movement underneath (git)                      |
+| xdg-terminal-exec-git | Open the user's preferred terminal emulator from apps and scripts (git)                                            |
+
 ## Development
 
-Run `make check` before committing. To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The package stays out of the next build and leaves the repository on the next publish.
+Run `make check` before committing. The check needs `shfmt` and Node on your machine. To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The package stays out of the next build and leaves the repository on the next publish.
 
 ---
 

@@ -25,7 +25,8 @@ concurrency:
 jobs:
   # Every run rebuilds everything. Git packages recompute pkgver() during the
   # build, so there is deliberately no upstream probe. The database is rebuilt
-  # from scratch, and a package leaves the repo by leaving packages/.
+  # from scratch, and a package leaves the repo by leaving packages/ or by
+  # gaining a HOLD file.
   discover:
     runs-on: ubuntu-latest
     # workflow_dispatch can start from any ref, so gate publishing on main.
@@ -34,39 +35,19 @@ jobs:
       contents: read
     outputs:
       matrix: ${{ steps.list.outputs.matrix }}
+      has_packages: ${{ steps.list.outputs.has_packages }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: List packages
         id: list
-        run: |
-          # Anything echoed inside $() is captured into the variable, not
-          # printed, so notices stay outside substitutions.
-          list=""
-          for dir in packages/*/; do
-            name=$(basename "$dir")
-            if [ -f "$dir/PKGBUILD" ] && [ ! -f "$dir/HOLD" ]; then
-              list+="$name"$'\n'
-            fi
-          done
-          matrix=$(printf '%s' "$list" | jq -R -s -c 'split("\n") | map(select(length > 0))')
-
-          count=$(jq 'length' <<<"$matrix")
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No buildable packages found under packages/"
-            exit 1
-          fi
-          for dir in packages/*/HOLD; do
-            [ -e "$dir" ] || continue
-            echo "::notice title=Held package::$(basename "$(dirname "$dir")") is held ($dir)"
-          done
-
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "Packages to build ($count): $matrix"
+        run: .github/scripts/list-packages.sh
 
   build:
     needs: discover
+    # Skips when every package is held, so HOLD can pause the whole repo.
+    if: needs.discover.outputs.has_packages == 'true'
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel@sha256:aecf5b39bd3139a951090dfb3d940f9317e4c5fca038c65fb49ac03910f7133e
@@ -126,54 +107,7 @@ jobs:
             cargo-
 
       - name: Setup build environment
-        run: |
-          pacman-key --init
-          pacman-key --populate archlinux
-          .github/scripts/retry.sh pacman -Syu --noconfirm --noprogressbar
-          .github/scripts/retry.sh pacman -S --noconfirm --needed --noprogressbar git mold pacman-contrib
-
-          sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3/g' /etc/makepkg.conf
-          sed -i '/^OPTIONS=/s/!lto/lto/' /etc/makepkg.conf
-          sed -i '/^OPTIONS=/s/ debug / !debug /' /etc/makepkg.conf
-          sed -i 's/-mno-omit-leaf-frame-pointer"/-mno-omit-leaf-frame-pointer -mpclmul"/' /etc/makepkg.conf
-          sed -i 's/LTOFLAGS="-flto=auto"/LTOFLAGS="-flto=auto -falign-functions=32"/' /etc/makepkg.conf
-
-          NPROC=$(nproc)
-          sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j${NPROC}\"/" /etc/makepkg.conf
-
-          cat >> /etc/makepkg.conf <<'EOF'
-          RUSTFLAGS="-Cforce-frame-pointers=yes -Copt-level=3 -Ctarget-cpu=x86-64-v3 -Clink-arg=-z -Clink-arg=pack-relative-relocs -Ccodegen-units=1 -Clink-arg=-fuse-ld=mold"
-          export CARGO_PROFILE_RELEASE_LTO=fat
-          export GOAMD64=v3
-          EOF
-
-          sed -i 's/COMPRESSZST=(zstd -c -T0 -)/COMPRESSZST=(zstd -c -T0 -q -19 -)/' /etc/makepkg.conf
-
-          # Every mutation above has to have applied. A silent no-op here
-          # publishes packages with the wrong build options, which already
-          # happened when the compression sed stopped matching Arch's line.
-          assert() {
-            grep -qE -- "$1" /etc/makepkg.conf || { echo "::error::makepkg.conf: expected but missing: $1"; exit 1; }
-          }
-          reject() {
-            if grep -qE -- "$1" /etc/makepkg.conf; then
-              echo "::error::makepkg.conf: unexpected state still present: $1"
-              exit 1
-            fi
-          }
-
-          assert '^CFLAGS=.*-march=x86-64-v3'
-          reject '^CFLAGS=.*-mtune=generic'
-          assert '^OPTIONS=.*\blto\b'
-          reject '^OPTIONS=.*!lto'
-          assert '^OPTIONS=.*!debug'
-          assert -- '-mpclmul'
-          assert -- '-falign-functions=32'
-          assert '^MAKEFLAGS="-j[0-9]+"'
-          assert '^COMPRESSZST=.*-19'
-          assert '^RUSTFLAGS="-Cforce-frame-pointers=yes'
-          assert '^export CARGO_PROFILE_RELEASE_LTO=fat'
-          assert '^export GOAMD64=v3'
+        run: .github/scripts/setup-build-env.sh
 
       - name: Setup GPG
         uses: ./.github/actions/setup-gpg
@@ -222,13 +156,15 @@ jobs:
 
       - name: Clean pacman cache
         if: always()
-        # Keep 2 versions. actions/cache restores this directory on later
+        # Keep two versions. actions/cache restores this directory on later
         # runs, and -k 0 would wipe it before the save step, leaving the
         # cache permanently empty.
         run: paccache -r -u -k 2 || true
 
-  # A failed or skipped `needs` job skips this one, so a failure anywhere
-  # publishes nothing. The next run rebuilds everything anyway.
+  # Nothing is installed in this job. The pinned archlinux:base image already
+  # has gpg, and repo-add --sign works without pacman-key. A failed or skipped
+  # `needs` job skips this one, so a failure anywhere publishes nothing. The
+  # next run rebuilds everything anyway.
   repo:
     needs: [discover, build]
     runs-on: ubuntu-latest
@@ -250,9 +186,9 @@ jobs:
       - name: Verify the signing key matches what users are told to trust
         run: |
           set -euo pipefail
-          secret_fp=$(gpg --with-colons --list-secret-keys | awk -F: '$1=="fpr" {print $10; exit}')
+          secret_fp=$(gpg --with-colons --list-secret-keys | awk -F: '$1=="fpr" {print $10; exit}' || true)
           show_home=$(mktemp -d)
-          published_fp=$(GNUPGHOME="$show_home" gpg --with-colons --show-keys signing_key.asc 2>/dev/null | awk -F: '$1=="fpr" {print $10; exit}')
+          published_fp=$(GNUPGHOME="$show_home" gpg --with-colons --show-keys signing_key.asc 2>/dev/null | awk -F: '$1=="fpr" {print $10; exit}' || true)
           if [ "$secret_fp" != "$published_fp" ]; then
             echo "::error::CI signs with $secret_fp but signing_key.asc is $published_fp. Republish the key"
             exit 1
@@ -269,43 +205,7 @@ jobs:
           path: artifacts/
 
       - name: Build repository database
-        run: |
-          set -euo pipefail
-          mkdir -p repo
-          cp signing_key.asc repo/
-          find artifacts/ -name pkg.tar -exec tar -xf {} -C repo \;
-
-          cd repo
-          shopt -s nullglob
-          pkgs=(*.pkg.tar.zst)
-          sigs=(*.pkg.tar.zst.sig)
-          if [ "${#pkgs[@]}" -eq 0 ]; then
-            echo "::error::No packages found to build repository"
-            exit 1
-          fi
-          # Under SigLevel = Required a package without a signature cannot be
-          # installed, so refuse to publish one.
-          if [ "${#sigs[@]}" -ne "${#pkgs[@]}" ]; then
-            echo "::error::Signatures (${#sigs[@]}) do not match packages (${#pkgs[@]}), refusing to publish"
-            exit 1
-          fi
-          echo "Publishing packages (${#pkgs[@]}):"
-          printf '  %s\n' "${pkgs[@]}"
-
-          repo-add --sign "${REPO_NAME}.db.tar.gz" "${pkgs[@]}"
-
-          # repo-add leaves the short names as symlinks. Pages preserves
-          # them as symlink entries, so turn them into real files.
-          for link in "${REPO_NAME}.db" "${REPO_NAME}.db.sig" "${REPO_NAME}.files" "${REPO_NAME}.files.sig"; do
-            if [ -L "$link" ]; then
-              target=$(readlink "$link")
-              rm "$link"
-              cp "$target" "$link"
-            fi
-          done
-
-          echo "Repository contents:"
-          ls -lah
+        run: .github/scripts/build-repo.sh
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
