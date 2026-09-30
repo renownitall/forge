@@ -34,5 +34,8 @@ for link in "${REPO_NAME}.db" "${REPO_NAME}.db.sig" "${REPO_NAME}.files" "${REPO
   fi
 done
 
+# The next push diffs from this commit, which spans runs that never published.
+echo "$GITHUB_SHA" >last-build.sha
+
 echo "Repository contents:"
 ls -lah

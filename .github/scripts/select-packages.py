@@ -124,6 +124,17 @@ def fetch_database(pages_base: str, repo_name: str) -> dict[str, str] | None:
         return None
 
 
+def fetch_marker(pages_base: str) -> str:
+    """Returns the commit the site was last published from, or an empty string."""
+    try:
+        with urllib.request.urlopen(
+            f"{pages_base}/last-build.sha", timeout=30
+        ) as response:
+            return response.read().decode("utf-8").strip()
+    except (urllib.error.URLError, OSError, UnicodeDecodeError):
+        return ""
+
+
 def gpg(
     env: dict[str, str], *args: str, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
@@ -209,7 +220,15 @@ def main() -> None:
     before = os.environ.get("EVENT_BEFORE", "")
     sha = os.environ.get("GITHUB_SHA", "")
     pages_base = os.environ["PAGES_BASE"]
-    full, changed = classify(event, before, sha)
+    # The marker spans pushes whose runs never published, and the push's own
+    # before commit covers the first runs before a marker exists.
+    base = before
+    if event == "push":
+        marker = fetch_marker(pages_base)
+        if marker:
+            base = marker
+            print(f"Diffing from the last published commit {marker[:7]}")
+    full, changed = classify(event, base, sha)
 
     published = fetch_database(pages_base, os.environ["REPO_NAME"])
     if published is None:
