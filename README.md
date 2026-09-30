@@ -60,10 +60,14 @@ Each package builds in its own job, and nothing publishes unless every job succe
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TD
-    trigger["push to main, daily at 04:37 UTC, or manual dispatch from main"] --> discover["discover<br/>lists packages/ and skips HOLD files"]
-    discover --> build["build<br/>runs makepkg with an edited makepkg.conf for each package"]
-    build --> repo["repo<br/>runs repo-add --sign over every artifact"]
-    repo --> deploy["deploy<br/>publishes forge.db, packages, and signing_key.asc to GitHub Pages"]
+    trigger["push to main, daily at 04:37 UTC, or manual dispatch from main"] --> discover["`**discover**
+lists packages/ and skips HOLD files`"]
+    discover --> build["`**build**
+runs makepkg with an edited makepkg.conf for each package`"]
+    build --> repo["`**repo**
+runs repo-add --sign over every artifact`"]
+    repo --> deploy["`**deploy**
+publishes forge.db, packages, and signing_key.asc to GitHub Pages`"]
 ```
 
 ---
