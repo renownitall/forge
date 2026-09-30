@@ -1,0 +1,36 @@
+# Maintainer: Akira Meisei <64113367+renownitall@users.noreply.github.com>
+_pkgname=exercism
+pkgname=$_pkgname-bin
+pkgver=3.5.8
+pkgrel=1
+pkgdesc="Download exercises from exercism.org, work on them locally, and submit your solutions (prebuilt binary)"
+arch=('x86_64')
+url="https://github.com/exercism/cli"
+license=('MIT')
+provides=("$_pkgname=$pkgver")
+conflicts=("$_pkgname")
+source=("$url/releases/download/v$pkgver/$_pkgname-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('4ce6a3e5e41e4c51606f8cb94ef6b46e8f45144ef8c613c1ea4b8b69209e02ad')
+
+build() {
+  cd "$srcdir"
+  # The completion scripts embed os.Args[0]. Invoke the binary through PATH so
+  # the completions register for `exercism` instead of `./exercism`.
+  PATH="$srcdir:$PATH" "$_pkgname" completion bash >"$_pkgname.bash"
+  PATH="$srcdir:$PATH" "$_pkgname" completion zsh >"$_pkgname.zsh"
+  PATH="$srcdir:$PATH" "$_pkgname" completion fish >"$_pkgname.fish"
+}
+
+package() {
+  cd "$srcdir"
+
+  install -Dm755 "$_pkgname" -t "$pkgdir/usr/bin"
+
+  # The completion file must be named `exercism` for bash-completion to find it.
+  install -Dm644 "$_pkgname.bash" "$pkgdir/usr/share/bash-completion/completions/$_pkgname"
+  install -Dm644 "$_pkgname.zsh" "$pkgdir/usr/share/zsh/site-functions/_$_pkgname"
+  install -Dm644 "$_pkgname.fish" -t "$pkgdir/usr/share/fish/vendor_completions.d"
+
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}
