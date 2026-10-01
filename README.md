@@ -32,7 +32,7 @@ The packages are built, signed with _GNU Privacy Guard (GPG)_, and published aut
    sudo pacman -S PACKAGE_NAME
    ```
 
-`pacman -Sl forge` lists everything that's published.
+To see everything that's published, run `pacman -Sl forge`.
 
 ## Packages
 
