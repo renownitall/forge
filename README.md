@@ -28,7 +28,7 @@ The packages are built, signed with _GNU Privacy Guard (GPG)_, and published aut
 3. Sync and install:
 
    ```bash
-   sudo pacman -Syu
+   sudo pacman -Sy
    sudo pacman -S PACKAGE_NAME
    ```
 
