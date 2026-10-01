@@ -36,7 +36,7 @@ The packages are built, signed with _GNU Privacy Guard (GPG)_, and published aut
 
 ## Packages
 
-There are eight packages, each under `packages/`:
+There are eight packages, each under the `packages/` directory:
 
 | Package               | Description                                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -51,13 +51,20 @@ There are eight packages, each under `packages/`:
 
 ## Development
 
-Run `make check` before committing. The check needs `shfmt`, Node, Python, and `uv` on your machine. Pushes that touch only documentation or tooling files build nothing, and a manual dispatch from the Actions tab rebuilds every package.
+Run `make check` before committing. The check needs `shfmt`, Node, Python, and `uv` on your machine.
 
 To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The package stays out of the next build and leaves the repository on the next publish.
 
 ## Build pipeline
 
-Every push to `main` rebuilds the packages it changed, while a scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, and versions advance only when upstream has actually moved. Every package builds in its own job, packages that are not rebuilt keep their published copy, and nothing publishes unless every job succeeds.
+- Every push to `main` rebuilds the packages it changed.
+- A push that touches only documentation or tooling files builds nothing.
+- A scheduled run at 04:37 UTC rebuilds every package.
+- A manual dispatch from the Actions tab rebuilds every package.
+- Git packages recompute `pkgver()` during the build, and versions advance only when upstream has actually moved.
+- Every package builds in its own job.
+- Packages that are not rebuilt keep their published copy.
+- Nothing publishes unless every job succeeds.
 
 Here's what it looks like visually:
 
