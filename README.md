@@ -2,7 +2,7 @@
 
 Hi. This is my custom Arch Linux package repository.
 
-The packages are built, signed with _GNU Privacy Guard (GPG)_, and published automatically. They're hosted on GitHub Pages. Every push to `main` rebuilds the packages it changed, while a scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, and versions advance only when upstream has actually moved. If you run Arch Linux, you can install these packages with `pacman`.
+The packages are built, signed with _GNU Privacy Guard (GPG)_, and published automatically. They're hosted on GitHub Pages. If you run Arch Linux, you can install these packages with `pacman`.
 
 > [!CAUTION]
 > Packages that compile to native machine code target `x86-64-v3` and need a compatible CPU. Prebuilt binaries, Python packages, scripts, and themes run on any `x86_64` machine.
@@ -57,7 +57,9 @@ To skip a package temporarily, create an empty `packages/NAME/HOLD` file. The pa
 
 ## Build pipeline
 
-Each push rebuilds only the packages it changed, while the daily run or a manual dispatch rebuilds everything. Every package builds in its own job, packages that are not rebuilt keep their published copy, and nothing publishes unless every job succeeds.
+Every push to `main` rebuilds the packages it changed, while a scheduled run at 04:37 UTC rebuilds all of them. Git packages recompute `pkgver()` during the build, and versions advance only when upstream has actually moved. Every package builds in its own job, packages that are not rebuilt keep their published copy, and nothing publishes unless every job succeeds.
+
+Here's what it looks like visually:
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "12px"}}}%%
